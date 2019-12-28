@@ -412,7 +412,6 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA4(
 }
 
 
-
 int main(int argc, char** argv) {
     if (argc != 4) {
         printf("usage: ./main [M] [K] [N]\n");
