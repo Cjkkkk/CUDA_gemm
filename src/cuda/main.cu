@@ -884,6 +884,14 @@ int main(int argc, char** argv) {
     printf("ratio= %f\n", gigaFlops[2] / gigaFlops[3]);
     
 
+    // write to file
+    FILE *fp;
+    fp = fopen("../res.txt", "a");
+    fprintf(fp, "%d %d\n", M, Sparsity);
+    for ( int i = 0 ; i < 4 ; i++ ) {
+        fprintf(fp, "%.3f\n", msecPerMatrixMul[i]);
+    }
+    fclose(fp);
 
     // sort four methods
     int idx[4] = {0, 1, 2, 3};

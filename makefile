@@ -30,4 +30,4 @@ benchmark: gemm
 	sh benchmark.sh
 
 sgemm_test: gemm
-	$(BUILD)/gemm 64 64 64
+	$(BUILD)/gemm 64 64 64 100
