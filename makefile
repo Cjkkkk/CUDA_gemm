@@ -1,6 +1,6 @@
-CU=/usr/local/cuda-9.0/bin/nvcc
+CU=/usr/local/cuda-10.2/bin/nvcc
 CC=g++
-LIBS=-lcublas
+LIBS=-lcublas -lcusparse
 CPP_SOURCE=./src/cpp
 CUDA_SOURCE=./src/cuda
 TEST_SOURCE=./test
@@ -28,6 +28,6 @@ test: $(BUILD)/test.o $(BUILD)/utils.o
 
 benchmark: gemm
 	sh benchmark.sh
-	
+
 sgemm_test: gemm
 	$(BUILD)/gemm 64 64 64
