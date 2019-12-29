@@ -27,9 +27,7 @@ test: $(BUILD)/test.o $(BUILD)/utils.o
 	./builds/test
 
 benchmark: gemm
-	$(BUILD)/gemm 256 256 256
-	$(BUILD)/gemm 512 512 512
-	$(BUILD)/gemm 1024 1024 1024
-	$(BUILD)/gemm 1536 1536 1536
-	$(BUILD)/gemm 2048 2048 2048
-	$(BUILD)/gemm 4096 4096 4096
+	sh benchmark.sh
+	
+sgemm_test: gemm
+	$(BUILD)/gemm 64 64 64

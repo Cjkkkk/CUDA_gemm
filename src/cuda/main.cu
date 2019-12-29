@@ -362,7 +362,7 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA4(
     // Thread index
     int tx = threadIdx.x;
     int ty = threadIdx.y;
-    
+
     float4 Csub[4] = {
         {0, 0, 0, 0},
         {0, 0, 0, 0},
@@ -440,15 +440,17 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA5(
     int row_ptr_start = A_row_ptr[by];
     int row_ptr_end = A_row_ptr[by + 1];
     
-    for (int tile_idx = 0 ; tile_idx < K / BLOCK_SIZE ;  tile_idx +=1) {
+    for (int row_ptr = row_ptr_start ; row_ptr < row_ptr_end ; row_ptr = row_ptr + 1) {
+        int tile_idx = A_col_idx[row_ptr];
         __shared__ float As[BLOCK_SIZE * BLOCK_SIZE];
         __shared__ float Bs[BLOCK_SIZE * BLOCK_SIZE];
-
+        float* A = A_Val + BLOCK_SIZE * BLOCK_SIZE * row_ptr;
         #pragma unroll
         for ( int i = 0 ; i < 4 ; i ++ ) {
             reinterpret_cast<float4*>(As + BLOCK_SIZE * (ty * 4 + i) + tx * 4)[0] 
-                = reinterpret_cast<float4*>(A + (BLOCK_SIZE * by + ty * 4 + i ) * K + BLOCK_SIZE * tile_idx + tx * 4 )[0];
-            reinterpret_cast<float4*>(Bs + BLOCK_SIZE * (ty * 4 + i) + tx * 4)[0] 
+                = reinterpret_cast<float4*>( A + BLOCK_SIZE * (ty * 4 + i) + tx * 4 )[0];
+            
+                reinterpret_cast<float4*>(Bs + BLOCK_SIZE * (ty * 4 + i) + tx * 4)[0] 
                 = reinterpret_cast<float4*>(B + (BLOCK_SIZE * tile_idx + ty * 4 + i ) * N + BLOCK_SIZE * bx + tx * 4 )[0];
         }
     
@@ -508,37 +510,43 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaMalloc(&d_B, bytes));
     checkCudaErrors(cudaMalloc(&d_C, bytes));
 
-    float valB = 0.5;
+    float valB = 1;
 
     for( int i = 0; i < M * K; i++ ) {
-        h_A[i] = 1.0;
+        int row = i / K;
+        int col = i % K;
+        if ( row < M / 2 && col < K / 2) h_A[i] = 0;
+        else if ( row >= M / 2 && col >= K / 2) h_A[i] = 0;
+        else {
+            h_A[i] = 1.0;
+        }
     }
 
     for( int i = 0; i < K * N; i++ ) {
-        if ( i > K * N / 2) h_B[i] = valB - 1;
+        if ( i > K * N / 2) h_B[i] = valB + 1;
         else {
-            h_B[i] = valB + 1;
+            h_B[i] = valB - 1;
         }
     }
 
     const int BLOCK_SIZE = 32;
     // texture
-    size_t pitch, tex_ofs;
-    size_t pitch1, tex_ofs1;
-    checkCudaErrors(cudaMallocPitch((void**)&d_A, &pitch, K*sizeof(float), M));
-    checkCudaErrors(cudaMemcpy2D(d_A, pitch, h_A, K*sizeof(float), K*sizeof(float), M,cudaMemcpyHostToDevice));
-    tex_A.normalized = false;
-    checkCudaErrors (cudaBindTexture2D (&tex_ofs, &tex_A, d_A, &tex_A.channelDesc,
-                                       K, M, pitch));
+    // size_t pitch, tex_ofs;
+    // size_t pitch1, tex_ofs1;
+    // checkCudaErrors(cudaMallocPitch((void**)&d_A, &pitch, K*sizeof(float), M));
+    // checkCudaErrors(cudaMemcpy2D(d_A, pitch, h_A, K*sizeof(float), K*sizeof(float), M,cudaMemcpyHostToDevice));
+    // tex_A.normalized = false;
+    // checkCudaErrors (cudaBindTexture2D (&tex_ofs, &tex_A, d_A, &tex_A.channelDesc,
+    //                                    K, M, pitch));
     
-    checkCudaErrors(cudaMallocPitch((void**)&d_B, &pitch1, N*sizeof(float), K));
-    checkCudaErrors(cudaMemcpy2D(d_B, pitch1, h_B, N*sizeof(float), N*sizeof(float), K,cudaMemcpyHostToDevice));
-    tex_B.normalized = false;
-    checkCudaErrors (cudaBindTexture2D (&tex_ofs1, &tex_B, d_B, &tex_B.channelDesc,
-                                        N, K, pitch1));
+    // checkCudaErrors(cudaMallocPitch((void**)&d_B, &pitch1, N*sizeof(float), K));
+    // checkCudaErrors(cudaMemcpy2D(d_B, pitch1, h_B, N*sizeof(float), N*sizeof(float), K,cudaMemcpyHostToDevice));
+    // tex_B.normalized = false;
+    // checkCudaErrors (cudaBindTexture2D (&tex_ofs1, &tex_B, d_B, &tex_B.channelDesc,
+    //                                     N, K, pitch1));
 
-    // checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
-    // checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
     
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid(N / dimBlock.x, M / dimBlock.y);
@@ -582,12 +590,13 @@ int main(int argc, char** argv) {
     checkCuBlasErrors ( cublasCreate(&blas_handle) );
     float alpha = 1.0;
     float beta = 0;
+    checkCudaErrors(cudaMemcpy( d_C, h_C, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
     for (int run = 0 ; run < nIter; run ++ ) {
         checkCuBlasErrors (
-            cublasSgemm (blas_handle, CUBLAS_OP_T, CUBLAS_OP_T, 
+            cublasSgemm (blas_handle, CUBLAS_OP_N, CUBLAS_OP_N, 
                 M, N, K, &alpha, 
-                d_A, M, d_B, K, &beta, d_C, M
+                d_B, K, d_A, M, &beta, d_C, K
             )
         );
     }
@@ -611,17 +620,14 @@ int main(int argc, char** argv) {
     double eps = 1.e-6;  // machine zero
     bool correct = true;
     for (int i = 0; i < M * N; i++) {
-        int row = i / N;
-        int col = i % N;
         // h_C1 是转置
-        double abs_err = fabs(h_C[i] - h_C1[col * M + row]);
+        double abs_err = fabs(h_C[i] - h_C1[i]);
         double dot_length = M;
         double abs_val = fabs(h_C[i]);
         double rel_err = abs_err / abs_val / dot_length;
-        // printf("%f ", h_C[i]);
         if (rel_err > eps) {
             printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n",
-                    i, h_C[i], h_C1[col * M + row], eps);
+                    i, h_C[i], h_C1[i], eps);
             correct = false;
             break;
         }
@@ -632,21 +638,34 @@ int main(int argc, char** argv) {
 
     // bcsr
     // convert to bcsr mat
-    bcsr mat{M, K, 32, 32};
-    cal_block(mat, h_A);
+    bcsr mat{(int)M, (int)K, 32, 32};
+    cal_block(&mat, h_A);
 
-    mat->row_ptr = (int*)malloc(sizeof(int) * ( mat->m_block + 1 ));
-    mat->col_idx = (int*)malloc(sizeof(int) * mat->nnz_block_num );
-    mat->val = (float*)malloc(sizeof(float) * mat->nnz_block_num * mat->m_block_sz * mat->n_block_sz);
+    mat.row_ptr = (int*)malloc(sizeof(int) * ( mat.m_block + 1 ));
+    mat.col_idx = (int*)malloc(sizeof(int) * mat.nnz_block_num );
+    mat.val = (float*)malloc(sizeof(float) * mat.nnz_block_num * mat.m_block_sz * mat.n_block_sz);
     
-    generate_bcsr(mat, h_A);
+    generate_bcsr(&mat, h_A);
 
+
+    float* val;
+    int* col_idx;
+    int* row_ptr;
+
+    checkCudaErrors(cudaMalloc(&val, sizeof(float) * mat.nnz_block_num * mat.m_block_sz * mat.n_block_sz));
+    checkCudaErrors(cudaMalloc(&col_idx, sizeof(int) * mat.nnz_block_num));
+    checkCudaErrors(cudaMalloc(&row_ptr, sizeof(int) * ( mat.m_block + 1 )));
+    
+    checkCudaErrors(cudaMemcpy( val, mat.val, sizeof(float) * mat.nnz_block_num * mat.m_block_sz * mat.n_block_sz, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( col_idx, mat.col_idx, sizeof(int) * mat.nnz_block_num, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( row_ptr, mat.row_ptr, sizeof(int) * ( mat.m_block + 1), cudaMemcpyHostToDevice));
+    
     checkCudaErrors(cudaEventRecord(start));
     for (int run = 0 ; run < nIter; run ++ ) {
         dim3 dimBlock(BLOCK_SIZE / 4, BLOCK_SIZE / 4);
-        dim3 dimGrid(N / dimBlock.x, M / dimBlock.y);
-        MatrixMulCUDA5<BLOCK_SIZE> <<< dimGrid, dimBlock >>>(
-            mat->val, mat->col_idx, mat->row_ptr, d_B, d_C, K, N);
+        dim3 dimGrid(N / 32, M / 32);
+        
+        MatrixMulCUDA5<BLOCK_SIZE> <<< dimGrid, dimBlock >>>(val, col_idx, row_ptr, d_B, d_C, K, N);
     }
     checkCudaErrors(cudaEventRecord(stop));
     checkCudaErrors(cudaEventSynchronize(stop));
@@ -662,11 +681,32 @@ int main(int argc, char** argv) {
         msecPerMatrixMul,
         flopsPerMatrixMul);
 
+    eps = 1.e-6;  // machine zero
+    correct = true;
+    for (int i = 0; i < M * N; i++) {
+        // h_C1 是转置
+        double abs_err = fabs(h_C[i] - h_C1[i]);
+        double dot_length = M;
+        double abs_val = fabs(h_C[i]);
+        double rel_err = abs_err / abs_val / dot_length;
+        if (rel_err > eps) {
+            printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n",
+                    i, h_C[i], h_C1[i], eps);
+            correct = false;
+            break;
+        }
+    }
+
+    printf("%s\n", correct ? "Result= PASS" : "Result= FAIL");
+    printf("ratio= %f\n", gigaFlops2 / gigaFlops1);
+
     // Free Memory
     cudaFree(d_A);
     cudaFree(d_B);
     cudaFree(d_C);
+    
     free(h_A);
     free(h_B);
     free(h_C);
+    free(h_C1);
 }
