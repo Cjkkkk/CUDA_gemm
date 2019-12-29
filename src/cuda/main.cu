@@ -530,13 +530,14 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA5(
 }
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        printf("usage: ./main [M] [K] [N]\n");
+    if (argc != 5) {
+        printf("usage: ./main [M] [K] [N] [Sparsity]\n");
         exit(0);
     }
     size_t M = atoi(argv[1]);
     size_t K = atoi(argv[2]);
     size_t N = atoi(argv[3]);
+    size_t Sparsity = atoi(argv[4]);
 
     size_t bytes = sizeof(float) * M * K;
     float* h_A = (float*)malloc(bytes);
@@ -558,16 +559,8 @@ int main(int argc, char** argv) {
 
     int m_block = M / 32;
     int k_block = K / 32;
-    // for( int i = 0; i < M * K; i++ ) {
-    //     int row = (i / K);
-    //     int col = (i % K);
-    //     int row_block = row / 32;
-    //     int col_block = col / 32;
-    //     if ((row_block * k_block + col_block)% 2 == 0) h_A[i] = 0;
-    //     else {
-    //         h_A[i] = 1.0;
-    //     }
-    // }
+    int nnz_block = m_block * k_block * (Sparsity / 100.0);
+    int stride = m_block * k_block / nnz_block;
     
     // 生成A的数据
     for( int i = 0; i < M * K; i++ ) {
@@ -575,7 +568,7 @@ int main(int argc, char** argv) {
         int col = (i % K);
         int row_block = row / 32;
         int col_block = col / 32;
-        if ((row_block * k_block + col_block)% 100 == 0) h_A[i] = 1;
+        if ((row_block * k_block + col_block)% stride == 0) h_A[i] = 1;
         else {
             h_A[i] = 0;
         }
@@ -889,7 +882,36 @@ int main(int argc, char** argv) {
 
     printf("%s\n", correct ? "Result= PASS" : "Result= FAIL");
     printf("ratio= %f\n", gigaFlops[2] / gigaFlops[3]);
+    
 
+
+    // sort four methods
+    int idx[4] = {0, 1, 2, 3};
+    for ( int i = 0 ; i < 4 ; i ++) {
+        for ( int j = i + 1 ; j < 4 ; j ++ ) {
+            if (msecPerMatrixMul[j] <= msecPerMatrixMul[i]) {
+                int temp_idx = idx[i];
+                idx[i] = idx[j];
+                idx[j] = temp_idx;
+                
+                float temp = msecPerMatrixMul[j];
+                msecPerMatrixMul[j] = msecPerMatrixMul[i];
+                msecPerMatrixMul[i] = temp;
+            }
+        }
+    }
+
+    printf("\u001b[31m\n");
+    for ( int i = 0 ; i < 4 ; i ++ ) {
+        if (idx[i] == 0 ) printf("my gemm: %.3f msec\n", msecPerMatrixMul[i]);
+        else if (idx[i] == 1 ) printf("cublas: %.3f msec\n", msecPerMatrixMul[i]);
+        else if (idx[i] == 2 ) printf("my block sparse: %.3f msec\n", msecPerMatrixMul[i]);
+        else if (idx[i] == 3 ) printf("cusparse(csr): %.3f msec\n", msecPerMatrixMul[i]);
+        else {
+
+        }
+    }
+    printf("\u001b[0m\n");
     // Free Memory
     cudaFree(d_A);
     cudaFree(d_B);
