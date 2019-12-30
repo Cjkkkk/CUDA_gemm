@@ -110,8 +110,7 @@ My gemm Performance= 6930.43 GFlop/s, Time= 2.479 msec, Size= 17179869184 Ops,
 CuBlas Performance= 7656.10 GFlop/s, Time= 2.244 msec, Size= 17179869184 Ops,
 Result= PASS
 ratio= 0.905217
-My sparse block gemm Performance= 18988.82 GFlop/s, Time= 0.905 msec, Size= 17179869184 Ops,
-CuSparse Performance= 195.89 GFlop/s, Time= 87.703 msec, Size= 17179869184 Ops,
+My sparse block gemm Performance= 18988.82 GFlop/s, Time= 0.905 msec, Size= 17179869184 Ops,CuSparse Performance= 195.89 GFlop/s, Time= 87.703 msec, Size= 17179869184 Ops,
 Result= PASS
 ratio= 96.938215
 
@@ -122,8 +121,7 @@ cusparse(csr): 87.703 msec
 ```
 ----- benchmark sparsity: 10% -----
 ```
-My gemm Performance= 6931.65 GFlop/s, Time= 2.478 msec, Size= 17179869184 Ops,
-CuBlas Performance= 7655.65 GFlop/s, Time= 2.244 msec, Size= 17179869184 Ops,
+My gemm Performance= 6931.65 GFlop/s, Time= 2.478 msec, Size= 17179869184 OpsCuBlas Performance= 7655.65 GFlop/s, Time= 2.244 msec, Size= 17179869184 Ops,
 Result= PASS
 ratio= 0.905430
 My sparse block gemm Performance= 58011.25 GFlop/s, Time= 0.296 msec, Size= 17179869184 Ops,
@@ -169,8 +167,7 @@ cublas: 2.244 msec
 my gemm: 2.477 msec
 ```
 ## TODO
-* MatrixMulCUDA7
-    * write back to C matrix, warp shuffle to enable global memory coalesce
-
+* (MatrixMulCUDA7) write back to C matrix, warp shuffle to enable global memory coalesce
+* (MatrixMulCUDA8) double buffering
 ## Note
 * sparsity约为1%的时候, cusparse的性能可以超越cublas
