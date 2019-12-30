@@ -391,6 +391,7 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA3(
     reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty ) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub;
 }
 
+// two level block
 template <int BLOCK_SIZE> __global__ void MatrixMulCUDA4( 
     float * __restrict__ A,
     float * __restrict__ B,
@@ -456,7 +457,6 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA4(
     reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 3) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[3];
 }
 
-
 template <int BLOCK_SIZE> __global__ void MatrixMulCUDA5( 
     float * __restrict__ A_Val,
     int* __restrict__ A_col_idx,
@@ -519,6 +519,73 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA5(
             Csub[3].w = fma(As[(ty * 4 + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 3], Csub[3].w);
             
         }
+        // wait threads to finish , otherwise next tile will overwrite the shared memory
+        __syncthreads();
+    }
+
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 ) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[0];
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 1) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[1];
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 2) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[2];
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 3) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[3];
+}
+
+
+// global memory col
+template <int BLOCK_SIZE> __global__ void MatrixMulCUDA6( 
+    float * __restrict__ A,
+    float * __restrict__ B,
+    float * __restrict__ C, 
+    const int K,
+    const int N) {
+    // Block index
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+
+    // Thread index
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    float4 Csub[4] = {
+        {0, 0, 0, 0},
+        {0, 0, 0, 0},
+        {0, 0, 0, 0},
+        {0, 0, 0, 0}};
+
+    for (int tile_idx = 0 ; tile_idx < K / BLOCK_SIZE ;  tile_idx +=1) {
+        __shared__ float As[BLOCK_SIZE * BLOCK_SIZE];
+        __shared__ float Bs[BLOCK_SIZE * BLOCK_SIZE];
+
+        #pragma unroll
+        for ( int i = 0 ; i < 4 ; i ++ ) {
+            reinterpret_cast<float4*>(As + BLOCK_SIZE * (ty * 4 + i) + tx * 4)[0] 
+                = reinterpret_cast<float4*>(A + (BLOCK_SIZE * by + ty + 8 * i ) * K + BLOCK_SIZE * tile_idx + tx * 4 )[0];
+            reinterpret_cast<float4*>(Bs + BLOCK_SIZE * (ty * 4 + i) + tx * 4)[0] 
+                = reinterpret_cast<float4*>(B + (BLOCK_SIZE * tile_idx + ty + 8 * i ) * N + BLOCK_SIZE * bx + tx * 4 )[0];
+        }
+    
+        __syncthreads();
+
+        #pragma unroll
+        for (int k = 0; k < BLOCK_SIZE; ++k) {
+            
+            Csub[0].x = fma(As[ty * 4 * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4], Csub[0].x);
+            Csub[0].y = fma(As[ty * 4 * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 1], Csub[0].y);
+            Csub[0].z = fma(As[ty * 4 * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 2], Csub[0].z);
+            Csub[0].w = fma(As[ty * 4 * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 3], Csub[0].w);
+            Csub[1].x = fma(As[(ty * 4 + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4], Csub[1].x);
+            Csub[1].y = fma(As[(ty * 4 + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 1], Csub[1].y);
+            Csub[1].z = fma(As[(ty * 4 + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 2], Csub[1].z);
+            Csub[1].w = fma(As[(ty * 4 + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 3], Csub[1].w);
+            Csub[2].x = fma(As[(ty * 4 + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4], Csub[2].x);
+            Csub[2].y = fma(As[(ty * 4 + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 1], Csub[2].y);
+            Csub[2].z = fma(As[(ty * 4 + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 2], Csub[2].z);
+            Csub[2].w = fma(As[(ty * 4 + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 3], Csub[2].w);
+            Csub[3].x = fma(As[(ty * 4 + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4], Csub[3].x);
+            Csub[3].y = fma(As[(ty * 4 + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 1], Csub[3].y);
+            Csub[3].z = fma(As[(ty * 4 + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 2], Csub[3].z);
+            Csub[3].w = fma(As[(ty * 4 + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * 4 + 3], Csub[3].w);
+            
+        }
 
         __syncthreads();
     }
@@ -528,6 +595,14 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA5(
     reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 2) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[2];
     reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 3) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[3];
 }
+
+// TODO add shuffle to enable GPU write back col
+template <int BLOCK_SIZE> __global__ void MatrixMulCUDA7( 
+    float * __restrict__ A,
+    float * __restrict__ B,
+    float * __restrict__ C, 
+    const int K,
+    const int N) {}
 
 int main(int argc, char** argv) {
     if (argc != 5) {
@@ -873,25 +948,19 @@ int main(int argc, char** argv) {
 
     // printf("\n\n");
 
-    // for ( int i = 0 ; i < M ; i ++) {
-    //     for ( int j = 0 ; j < N ; j ++ ) {
-    //         printf("%0.f ", h_C1[i * N + j]);
-    //     }
-    //     printf("\n");
-    // }
 
     printf("%s\n", correct ? "Result= PASS" : "Result= FAIL");
     printf("ratio= %f\n", gigaFlops[2] / gigaFlops[3]);
     
 
     // write to file
-    FILE *fp;
-    fp = fopen("../res.txt", "a");
-    fprintf(fp, "%d %d\n", M, Sparsity);
-    for ( int i = 0 ; i < 4 ; i++ ) {
-        fprintf(fp, "%.3f\n", msecPerMatrixMul[i]);
-    }
-    fclose(fp);
+    // FILE *fp;
+    // fp = fopen("./res.txt", "a");
+    // fprintf(fp, "%d %d\n", M, Sparsity);
+    // for ( int i = 0 ; i < 4 ; i++ ) {
+    //     fprintf(fp, "%.3f\n", msecPerMatrixMul[i]);
+    // }
+    // fclose(fp);
 
     // sort four methods
     int idx[4] = {0, 1, 2, 3};
