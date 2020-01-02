@@ -36,4 +36,4 @@ benchmark_sparse_gemm: sparse_gemm
 	sh benchmark_sparse_gemm.sh
 
 gemm_test: gemm
-	$(BUILD)/gemm 64 64 64 100
+	$(BUILD)/gemm 64 64 64
