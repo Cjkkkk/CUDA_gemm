@@ -419,9 +419,16 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA4(
     reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 3) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[3];
 }
 
-#define Mat(row, col, lda) ( Mat[(row) * (lda) + (col)] )
+#define offset(row, col, lda) ( (row) * (ld) + (col) )
 // global memory col
-template <int BLOCK_SIZE> __global__ void MatrixMulCUDA6( 
+template <
+    int BLOCK_SIZE_M, 
+    int BLOCK_SIZE_K,
+    int BLOCK_SIZE_N,
+    int THREAD_SIZE_M,
+    int THREAD_SIZE_N
+    > 
+__global__ void MatrixMulCUDA6( 
     float * __restrict__ A,
     float * __restrict__ B,
     float * __restrict__ C, 
@@ -435,71 +442,84 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA6(
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     
-    const int STRIDE = blockDim.x;
-    const int REG_BLOCK_SIZE = BLOCK_SIZE / blockDim.x;
+    // Block size
+    // const int bszx = blockDim.x;
+    const int bszy = blockDim.y;
     
+    // shared memory
+    __shared__ float As[BLOCK_SIZE_M * BLOCK_SIZE_K];
+    __shared__ float Bs[BLOCK_SIZE_K * BLOCK_SIZE_N];
     // 16 registers
     float4 Csub[4] = {
         {0, 0, 0, 0},
         {0, 0, 0, 0},
         {0, 0, 0, 0},
         {0, 0, 0, 0}};
+    float4 b_vec;
 
-    for (int tile_idx = 0 ; tile_idx < K / BLOCK_SIZE ;  tile_idx +=1) {
-        __shared__ float As[BLOCK_SIZE * BLOCK_SIZE];
-        __shared__ float Bs[BLOCK_SIZE * BLOCK_SIZE];
+    int As_offset = 0;
+    int Bs_offset = 0;
+    
+    for (int tile_idx = 0 ; tile_idx < K / BLOCK_SIZE_K ;  tile_idx +=1) {
+        float* As_read = As + As_offset;
+        float* Bs_read = Bs + Bs_offset;
 
+        int idx = tx;
+        // load A tile
         #pragma unroll
-        for ( int i = 0 ; i < 4 ; i ++ ) {
-            reinterpret_cast<float4*>(As + BLOCK_SIZE * (ty + STRIDE * i) + tx * REG_BLOCK_SIZE)[0] 
-          = reinterpret_cast<float4*>(A + K * (BLOCK_SIZE * by + ty + STRIDE * i ) + BLOCK_SIZE * tile_idx + tx * REG_BLOCK_SIZE )[0];
-            reinterpret_cast<float4*>(Bs + BLOCK_SIZE * (ty + STRIDE * i) + tx * REG_BLOCK_SIZE)[0] 
-          = reinterpret_cast<float4*>(B + N * (BLOCK_SIZE * tile_idx + ty + STRIDE * i ) + BLOCK_SIZE * bx + tx * REG_BLOCK_SIZE )[0];
+        for ( int i = 0 ; i < BLOCK_SIZE_M / bszy ; i ++ ) {
+            reinterpret_cast<float4*>(
+                As_read + BLOCK_SIZE_K * (ty + bszy * i) + idx * 4)[0] 
+          = reinterpret_cast<float4*>(
+                A + K * (BLOCK_SIZE_M * by + ty + bszy * i ) + BLOCK_SIZE_K * tile_idx + idx * 4 )[0];
+        }
+
+        // load B tile
+        #pragma unroll
+        for ( int i = 0 ; i < BLOCK_SIZE_K / bszy ; i ++ ) {
+            reinterpret_cast<float4*>(
+                Bs_read + BLOCK_SIZE_N * (ty + bszy * i) + tx * 4)[0] 
+          = reinterpret_cast<float4*>(
+                B + N * (BLOCK_SIZE_K * tile_idx + ty + bszy * i ) + BLOCK_SIZE_N * bx + tx * 4 )[0];
         }
     
         __syncthreads();
 
         #pragma unroll
-        for (int k = 0; k < BLOCK_SIZE; ++k) {
+        for (int k = 0; k < BLOCK_SIZE_K; ++ k) {
+            b_vec = reinterpret_cast<float4*>(Bs_read + BLOCK_SIZE_N * k + tx * 4)[0];
             
-            Csub[0].x = fma(As[ty * REG_BLOCK_SIZE * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE], Csub[0].x);
-            Csub[0].y = fma(As[ty * REG_BLOCK_SIZE * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 1], Csub[0].y);
-            Csub[0].z = fma(As[ty * REG_BLOCK_SIZE * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 2], Csub[0].z);
-            Csub[0].w = fma(As[ty * REG_BLOCK_SIZE * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 3], Csub[0].w);
-
-            Csub[1].x = fma(As[(ty * REG_BLOCK_SIZE + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE], Csub[1].x);
-            Csub[1].y = fma(As[(ty * REG_BLOCK_SIZE + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 1], Csub[1].y);
-            Csub[1].z = fma(As[(ty * REG_BLOCK_SIZE + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 2], Csub[1].z);
-            Csub[1].w = fma(As[(ty * REG_BLOCK_SIZE + 1) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 3], Csub[1].w);
-
-            Csub[2].x = fma(As[(ty * REG_BLOCK_SIZE + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE], Csub[2].x);
-            Csub[2].y = fma(As[(ty * REG_BLOCK_SIZE + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 1], Csub[2].y);
-            Csub[2].z = fma(As[(ty * REG_BLOCK_SIZE + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 2], Csub[2].z);
-            Csub[2].w = fma(As[(ty * REG_BLOCK_SIZE + 2) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 3], Csub[2].w);
-
-            Csub[3].x = fma(As[(ty * REG_BLOCK_SIZE + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE], Csub[3].x);
-            Csub[3].y = fma(As[(ty * REG_BLOCK_SIZE + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 1], Csub[3].y);
-            Csub[3].z = fma(As[(ty * REG_BLOCK_SIZE + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 2], Csub[3].z);
-            Csub[3].w = fma(As[(ty * REG_BLOCK_SIZE + 3) * BLOCK_SIZE + k], Bs[k * BLOCK_SIZE + tx * REG_BLOCK_SIZE + 3], Csub[3].w);
+            Csub[0].x = fma(As_read[BLOCK_SIZE_K *  ty * 4      + k], b_vec.x, Csub[0].x);
+            Csub[0].y = fma(As_read[BLOCK_SIZE_K *  ty * 4      + k], b_vec.y, Csub[0].y);
+            Csub[0].z = fma(As_read[BLOCK_SIZE_K *  ty * 4      + k], b_vec.z, Csub[0].z);
+            Csub[0].w = fma(As_read[BLOCK_SIZE_K *  ty * 4      + k], b_vec.w, Csub[0].w);
+            Csub[1].x = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 1) + k], b_vec.x, Csub[1].x);
+            Csub[1].y = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 1) + k], b_vec.y, Csub[1].y);
+            Csub[1].z = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 1) + k], b_vec.z, Csub[1].z);
+            Csub[1].w = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 1) + k], b_vec.w, Csub[1].w);
+            Csub[2].x = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 2) + k], b_vec.x, Csub[2].x);
+            Csub[2].y = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 2) + k], b_vec.y, Csub[2].y);
+            Csub[2].z = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 2) + k], b_vec.z, Csub[2].z);
+            Csub[2].w = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 2) + k], b_vec.w, Csub[2].w);
+            Csub[3].x = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 3) + k], b_vec.x, Csub[3].x);
+            Csub[3].y = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 3) + k], b_vec.y, Csub[3].y);
+            Csub[3].z = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 3) + k], b_vec.z, Csub[3].z);
+            Csub[3].w = fma(As_read[BLOCK_SIZE_K * (ty * 4 + 3) + k], b_vec.w, Csub[3].w);
             
         }
-
+        // As_offset ^= (BLOCK_SIZE_M * BLOCK_SIZE_K);
+        // Bs_offset ^= (BLOCK_SIZE_K * BLOCK_SIZE_N);
         __syncthreads();
     }
 
-    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * REG_BLOCK_SIZE ) + BLOCK_SIZE * bx + tx * REG_BLOCK_SIZE )[0] = Csub[0];
-    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * REG_BLOCK_SIZE + 1) + BLOCK_SIZE * bx + tx * REG_BLOCK_SIZE )[0] = Csub[1];
-    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * REG_BLOCK_SIZE + 2) + BLOCK_SIZE * bx + tx * REG_BLOCK_SIZE )[0] = Csub[2];
-    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * REG_BLOCK_SIZE + 3) + BLOCK_SIZE * bx + tx * REG_BLOCK_SIZE )[0] = Csub[3];
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE_M * by + ty * 4 ) + BLOCK_SIZE_N * bx + tx * 4 )[0] = Csub[0];
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE_M * by + ty * 4 + 1) + BLOCK_SIZE_N * bx + tx * 4 )[0] = Csub[1];
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE_M * by + ty * 4 + 2) + BLOCK_SIZE_N * bx + tx * 4 )[0] = Csub[2];
+    reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE_M * by + ty * 4 + 3) + BLOCK_SIZE_N * bx + tx * 4 )[0] = Csub[3];
 }
 
 // TODO add shuffle to enable GPU write back col
-template <int BLOCK_SIZE> __global__ void MatrixMulCUDA7( 
-    float * __restrict__ A,
-    float * __restrict__ B,
-    float * __restrict__ C, 
-    const int K,
-    const int N) {}
+
 
 int main(int argc, char** argv) {
     if (argc != 4) {
@@ -527,16 +547,20 @@ int main(int argc, char** argv) {
     double gigaFlops[2] = {0, 0};
     double flopsPerMatrixMul = 2.0 * M * N * K;
 
-    int k_block = K / 32;
+    const int BLOCK_SIZE_M = 32;
+    const int BLOCK_SIZE_K = 32;
+    const int BLOCK_SIZE_N = 32;
+    const int THREAD_SIZE_M = 4;
+    const int THREAD_SIZE_N = 4;
+    int k_block = K / BLOCK_SIZE_K;
     int stride = 2;
-    const int BLOCK_SIZE = 32;
 
     // 生成A的数据
     for( int i = 0; i < M * K; i++ ) {
         int row = (i / K);
         int col = (i % K);
-        int row_block = row / 32;
-        int col_block = col / 32;
+        int row_block = row / BLOCK_SIZE_M;
+        int col_block = col / BLOCK_SIZE_K;
         if ((row_block * k_block + col_block) % stride == 0) h_A[i] = 1;
         else {
             h_A[i] = 0;
@@ -569,9 +593,6 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
     
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 dimGrid(N / dimBlock.x, M / dimBlock.y);
-    
     cudaEvent_t start, stop;
     checkCudaErrors(cudaEventCreate(&start));
     checkCudaErrors(cudaEventCreate(&stop));
@@ -587,9 +608,11 @@ int main(int argc, char** argv) {
         // dim3 dimBlock(BLOCK_SIZE / 4, BLOCK_SIZE);
         // MatrixMulCUDA3<BLOCK_SIZE> <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
 
+        dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_N, BLOCK_SIZE_M / THREAD_SIZE_M);
+        dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
+        MatrixMulCUDA6<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_M, THREAD_SIZE_N> 
+        <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
 
-        dim3 dimBlock(BLOCK_SIZE / 4, BLOCK_SIZE / 4);
-        MatrixMulCUDA6<BLOCK_SIZE> <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
     }
     checkCudaErrors(cudaEventRecord(stop));
     checkCudaErrors(cudaEventSynchronize(stop));
@@ -619,6 +642,8 @@ int main(int argc, char** argv) {
                 d_A, M, d_B, K, &beta, d_C, K
             )
         );
+        // dim3 dimBlock(BLOCK_SIZE / 4, BLOCK_SIZE / 4);
+        // MatrixMulCUDA4<BLOCK_SIZE> <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
     }
     checkCudaErrors(cudaEventRecord(stop));
     checkCudaErrors(cudaEventSynchronize(stop));
