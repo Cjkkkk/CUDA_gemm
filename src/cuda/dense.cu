@@ -419,13 +419,18 @@ template <int BLOCK_SIZE> __global__ void MatrixMulCUDA4(
     reinterpret_cast<float4*> (C + N * ( BLOCK_SIZE * by + ty * 4 + 3) + BLOCK_SIZE * bx + tx * 4 )[0] = Csub[3];
 }
 
-// global memory col
+// cal offset from row col and ld , in row-major matrix, ld is the width of the matrix
+#define OFFSET(row, col, ld) ((row) * (ld) + (col))
+
+// transfer float4
+#define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 template <
-    int BLOCK_SIZE_M, 
-    int BLOCK_SIZE_K,
-    int BLOCK_SIZE_N,
-    int THREAD_SIZE_M,
-    int THREAD_SIZE_N
+    const int BLOCK_SIZE_M,  // width of block of C that each thread block calculate
+    const int BLOCK_SIZE_K,  // height of block of A that each thread block load into shared memory
+    const int BLOCK_SIZE_N,  // height of block of C that each thread block calculate
+    const int THREAD_SIZE_Y, // height of block of C that each thread calculate
+    const int THREAD_SIZE_X,  // width of block of C that each thread calculate
+    const bool ENABLE_DOUBLE_BUFFER // whether enable double buffering or not
     > 
 __global__ void MatrixMulCUDA6( 
     float * __restrict__ A,
@@ -442,76 +447,78 @@ __global__ void MatrixMulCUDA6(
     int ty = threadIdx.y;
     
     // shared memory
-    __shared__ float As[BLOCK_SIZE_M * BLOCK_SIZE_K];
-    __shared__ float Bs[BLOCK_SIZE_K * BLOCK_SIZE_N];
-    
+    // __shared__ float As[BLOCK_SIZE_M * 2][BLOCK_SIZE_K];
+    // __shared__ float Bs[BLOCK_SIZE_K * 2][BLOCK_SIZE_N];
+
+    __shared__ float As[BLOCK_SIZE_M][BLOCK_SIZE_K];
+    __shared__ float Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
     // registers for C
-    float accum[THREAD_SIZE_M][THREAD_SIZE_N];
-    for ( int i = 0 ; i < THREAD_SIZE_M ; i ++) {
-        for ( int j = 0 ; j < THREAD_SIZE_N ; j ++) {
+    float accum[THREAD_SIZE_Y][THREAD_SIZE_X];
+    
+    #pragma unroll
+    for ( int i = 0 ; i < THREAD_SIZE_Y ; i ++) {
+        #pragma unroll
+        for ( int j = 0 ; j < THREAD_SIZE_X ; j ++) {
             accum[i][j] = 0;
         }
     }
 
     // registers for A and B
-    float frag_a[THREAD_SIZE_M];
-    float frag_b[THREAD_SIZE_N];
+    float frag_a[THREAD_SIZE_Y];
+    float frag_b[THREAD_SIZE_X];
     
-    int tid = ty * 8 + tx;
-    for (int tile_idx = 0 ; tile_idx < K / BLOCK_SIZE_K ;  tile_idx +=1) {
-        
-        int A_row = (tid / ( BLOCK_SIZE_K / 4 ));
-        int A_col = (tid % ( BLOCK_SIZE_K / 4 )) * 4;
+    const int tid = ty * ( BLOCK_SIZE_N / THREAD_SIZE_X ) + tx;
+    const int A_row = (tid / ( BLOCK_SIZE_K / 4 ));
+    const int A_col = (tid % ( BLOCK_SIZE_K / 4 )) * 4;
+    const int B_row = (tid / ( BLOCK_SIZE_N / 4 ));
+    const int B_col = (tid % ( BLOCK_SIZE_N / 4 )) * 4;
 
-        int B_row = (tid / ( BLOCK_SIZE_N / 4 ));
-        int B_col = (tid % ( BLOCK_SIZE_N / 4 )) * 4;
-
+    const int THREAD_NUM_PER_BLOCK = BLOCK_SIZE_M / THREAD_SIZE_Y * BLOCK_SIZE_N / THREAD_SIZE_X;
+    const int A_STRIDE = THREAD_NUM_PER_BLOCK / ( BLOCK_SIZE_K / 4 );
+    const int B_STRIDE = THREAD_NUM_PER_BLOCK / ( BLOCK_SIZE_N / 4 );
+    
+    // can not unroll since K can not be determined at this point
+    for (int tile_idx = 0 ; tile_idx < K ;  tile_idx += BLOCK_SIZE_K) {
+        // load A from global memory to shared memory
         #pragma unroll
-        for ( int i = 0 ; i < 4 ; i ++) {
-            reinterpret_cast<float4*>(As + (A_row + i * 8) * BLOCK_SIZE_K + A_col)[0]
-            = reinterpret_cast<float4*>(A + K * (BLOCK_SIZE_M * by + (A_row + i * 8)) + A_col + BLOCK_SIZE_K * tile_idx)[0];
-            // reinterpret_cast<float4*>(Bs + (B_row + i * 8) * BLOCK_SIZE_N + B_col)[0]
-            // = reinterpret_cast<float4*>(B + K * (BLOCK_SIZE_K * tile_idx + (B_row + i * 8)) + B_col + BLOCK_SIZE_N * bx)[0];
+        for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_STRIDE) {
+            FETCH_FLOAT4(As[A_row + i][A_col]) = FETCH_FLOAT4(A[OFFSET(
+                    BLOCK_SIZE_M * by + A_row + i, // row
+                    A_col + tile_idx, // col
+                    K )]);
         }
 
+        // load B from global memory to shared memory
         #pragma unroll
-        for ( int i = 0 ; i < 4 ; i ++) {
-            // reinterpret_cast<float4*>(As + (A_row + i * 8) * BLOCK_SIZE_K + A_col)[0]
-            // = reinterpret_cast<float4*>(A + K * (BLOCK_SIZE_M * by + (A_row + i * 8)) + A_col + BLOCK_SIZE_K * tile_idx)[0];
-            reinterpret_cast<float4*>(Bs + (B_row + i * 8) * BLOCK_SIZE_N + B_col)[0]
-            = reinterpret_cast<float4*>(B + K * (BLOCK_SIZE_K * tile_idx + (B_row + i * 8)) + B_col + BLOCK_SIZE_N * bx)[0];
+        for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_STRIDE) {
+            FETCH_FLOAT4(Bs[B_row + i][B_col]) = FETCH_FLOAT4(B[OFFSET(
+                    tile_idx + B_row + i, // row
+                    B_col + BLOCK_SIZE_N * bx, // col
+                    K )]);
         }
-        
-        // #pragma unroll
-        // for ( int i = 0 ; i < 4 ; i ++ ) {
-        //     #pragma unroll
-        //     for (int j = 0 ; j < 4 ; j ++ ) {
-        //         As [BLOCK_SIZE_K * (ty * 4 + i) + tx + 8 * j]
-        //         = A [(BLOCK_SIZE_K * by + ty * 4 + i ) * K + BLOCK_SIZE_K * tile_idx + tx + 8 * j];
-        //         Bs [BLOCK_SIZE_K * (ty * 4 + i) + tx + 8 * j]
-        //         = B[(BLOCK_SIZE_K * tile_idx + ty * 4 + i ) * N + BLOCK_SIZE_K * bx + tx + 8 * j];
-        //     }
-        // }
     
         __syncthreads();
 
+        // compute c
         #pragma unroll
         for (int k = 0; k < BLOCK_SIZE_K; ++ k) {
+            // load A from shared memory to register
             #pragma unroll
-            for (int thread_y = 0; thread_y < THREAD_SIZE_M; ++thread_y) {
-                frag_a[thread_y] = As[BLOCK_SIZE_K *  (ty * THREAD_SIZE_M + thread_y) + k];
+            for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
+                frag_a[thread_y] = As[ty * THREAD_SIZE_Y + thread_y][k];
             }
 
+            // load B from shared memory to register
             #pragma unroll
-            for (int thread_x = 0; thread_x < THREAD_SIZE_N; ++thread_x) {
-                frag_b[thread_x] = Bs[BLOCK_SIZE_N *  k + THREAD_SIZE_N * tx + thread_x];
+            for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x += 4) {
+                FETCH_FLOAT4(frag_b[thread_x]) = FETCH_FLOAT4(Bs[k][THREAD_SIZE_X * tx + thread_x]);
             }
             
             #pragma unroll
-            for (int thread_y = 0; thread_y < THREAD_SIZE_M; ++thread_y) {
+            for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
                 #pragma unroll
-                for (int thread_x = 0; thread_x < THREAD_SIZE_N; ++thread_x) {
-                    accum[thread_y][thread_x ] += frag_a[thread_y] * frag_b[thread_x];
+                for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
+                    accum[thread_y][thread_x] += frag_a[thread_y] * frag_b[thread_x];
                 }
             }
             
@@ -521,11 +528,13 @@ __global__ void MatrixMulCUDA6(
 
     // store back to C
     #pragma unroll
-    for (int thread_y = 0; thread_y < THREAD_SIZE_M; ++thread_y) {
+    for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
         #pragma unroll
-        for (int thread_x = 0; thread_x < THREAD_SIZE_N; ++thread_x) {
-            C[N * ( BLOCK_SIZE_M * by + ty * THREAD_SIZE_M + thread_y) + BLOCK_SIZE_N * bx + tx * THREAD_SIZE_N + thread_x]
-            = accum[thread_y][thread_x];
+        for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
+            C[OFFSET(
+                BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
+                BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + thread_x,
+                N)] = accum[thread_y][thread_x];
         }
     }
 }
@@ -560,10 +569,11 @@ int main(int argc, char** argv) {
     double flopsPerMatrixMul = 2.0 * M * N * K;
 
     const int BLOCK_SIZE_M = 32;
-    const int BLOCK_SIZE_K = 32;
-    const int BLOCK_SIZE_N = 32;
-    const int THREAD_SIZE_M = 4;
-    const int THREAD_SIZE_N = 4;
+    const int BLOCK_SIZE_K = 16;
+    const int BLOCK_SIZE_N = 64;
+    const int THREAD_SIZE_Y = 4;
+    const int THREAD_SIZE_X = 8;
+    const bool ENABLE_DOUBLE_BUFFER = false;
     int k_block = K / BLOCK_SIZE_K;
     int stride = 2;
 
@@ -620,9 +630,9 @@ int main(int argc, char** argv) {
         // dim3 dimBlock(BLOCK_SIZE / 4, BLOCK_SIZE);
         // MatrixMulCUDA3<BLOCK_SIZE> <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
 
-        dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_N, BLOCK_SIZE_M / THREAD_SIZE_M);
+        dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
         dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
-        MatrixMulCUDA6<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_M, THREAD_SIZE_N> 
+        MatrixMulCUDA6<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, ENABLE_DOUBLE_BUFFER> 
         <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
 
     }

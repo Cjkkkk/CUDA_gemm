@@ -169,5 +169,7 @@ my gemm: 2.477 msec
 ## TODO
 * (MatrixMulCUDA7) write back to C matrix, warp shuffle to enable global memory coalesce
 * (MatrixMulCUDA8) double buffering
+
 ## Note
 * sparsity约为1%的时候, cusparse的性能可以超越cublas
+* 合理分配寄存器 尽可能让参数在编译器确定节省计算资源和寄存器数目
