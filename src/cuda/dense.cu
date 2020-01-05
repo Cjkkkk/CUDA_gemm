@@ -457,16 +457,41 @@ __global__ void MatrixMulCUDA6(
     float frag_a[THREAD_SIZE_M];
     float frag_b[THREAD_SIZE_N];
     
+    int tid = ty * 8 + tx;
     for (int tile_idx = 0 ; tile_idx < K / BLOCK_SIZE_K ;  tile_idx +=1) {
         
+        int A_row = (tid / ( BLOCK_SIZE_K / 4 ));
+        int A_col = (tid % ( BLOCK_SIZE_K / 4 )) * 4;
+
+        int B_row = (tid / ( BLOCK_SIZE_N / 4 ));
+        int B_col = (tid % ( BLOCK_SIZE_N / 4 )) * 4;
+
         #pragma unroll
-        for ( int i = 0 ; i < 4 ; i ++ ) {
-            reinterpret_cast<float4*>(As + BLOCK_SIZE_K * (ty * 4 + i) + tx * 4)[0] 
-                = reinterpret_cast<float4*>(A + (BLOCK_SIZE_K * by + ty * 4 + i ) * K + BLOCK_SIZE_K * tile_idx + tx * 4 )[0];
-            reinterpret_cast<float4*>(Bs + BLOCK_SIZE_K * (ty * 4 + i) + tx * 4)[0] 
-                = reinterpret_cast<float4*>(B + (BLOCK_SIZE_K * tile_idx + ty * 4 + i ) * N + BLOCK_SIZE_K * bx + tx * 4 )[0];
+        for ( int i = 0 ; i < 4 ; i ++) {
+            reinterpret_cast<float4*>(As + (A_row + i * 8) * BLOCK_SIZE_K + A_col)[0]
+            = reinterpret_cast<float4*>(A + K * (BLOCK_SIZE_M * by + (A_row + i * 8)) + A_col + BLOCK_SIZE_K * tile_idx)[0];
+            // reinterpret_cast<float4*>(Bs + (B_row + i * 8) * BLOCK_SIZE_N + B_col)[0]
+            // = reinterpret_cast<float4*>(B + K * (BLOCK_SIZE_K * tile_idx + (B_row + i * 8)) + B_col + BLOCK_SIZE_N * bx)[0];
         }
-    
+
+        #pragma unroll
+        for ( int i = 0 ; i < 4 ; i ++) {
+            // reinterpret_cast<float4*>(As + (A_row + i * 8) * BLOCK_SIZE_K + A_col)[0]
+            // = reinterpret_cast<float4*>(A + K * (BLOCK_SIZE_M * by + (A_row + i * 8)) + A_col + BLOCK_SIZE_K * tile_idx)[0];
+            reinterpret_cast<float4*>(Bs + (B_row + i * 8) * BLOCK_SIZE_N + B_col)[0]
+            = reinterpret_cast<float4*>(B + K * (BLOCK_SIZE_K * tile_idx + (B_row + i * 8)) + B_col + BLOCK_SIZE_N * bx)[0];
+        }
+        
+        // #pragma unroll
+        // for ( int i = 0 ; i < 4 ; i ++ ) {
+        //     #pragma unroll
+        //     for (int j = 0 ; j < 4 ; j ++ ) {
+        //         As [BLOCK_SIZE_K * (ty * 4 + i) + tx + 8 * j]
+        //         = A [(BLOCK_SIZE_K * by + ty * 4 + i ) * K + BLOCK_SIZE_K * tile_idx + tx + 8 * j];
+        //         Bs [BLOCK_SIZE_K * (ty * 4 + i) + tx + 8 * j]
+        //         = B[(BLOCK_SIZE_K * tile_idx + ty * 4 + i ) * N + BLOCK_SIZE_K * bx + tx + 8 * j];
+        //     }
+        // }
     
         __syncthreads();
 
