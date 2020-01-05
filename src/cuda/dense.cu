@@ -446,6 +446,14 @@ __global__ void MatrixMulCUDA6(
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     
+    // size of thread block
+    const int bszx = BLOCK_SIZE_N / THREAD_SIZE_X;
+    const int bszy = BLOCK_SIZE_M / THREAD_SIZE_Y;
+    const int THREAD_NUM_PER_BLOCK = bszy * bszx;
+
+    // thread id
+    const int tid = ty * bszx + tx;
+
     // shared memory
     // __shared__ float As[BLOCK_SIZE_M * 2][BLOCK_SIZE_K];
     // __shared__ float Bs[BLOCK_SIZE_K * 2][BLOCK_SIZE_N];
@@ -453,47 +461,44 @@ __global__ void MatrixMulCUDA6(
     __shared__ float As[BLOCK_SIZE_M][BLOCK_SIZE_K];
     __shared__ float Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
     // registers for C
-    float accum[THREAD_SIZE_Y][THREAD_SIZE_X];
-    
-    #pragma unroll
-    for ( int i = 0 ; i < THREAD_SIZE_Y ; i ++) {
-        #pragma unroll
-        for ( int j = 0 ; j < THREAD_SIZE_X ; j ++) {
-            accum[i][j] = 0;
-        }
-    }
-
+    float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
     // registers for A and B
     float frag_a[THREAD_SIZE_Y];
     float frag_b[THREAD_SIZE_X];
     
-    const int tid = ty * ( BLOCK_SIZE_N / THREAD_SIZE_X ) + tx;
-    const int A_row = (tid / ( BLOCK_SIZE_K / 4 ));
-    const int A_col = (tid % ( BLOCK_SIZE_K / 4 )) * 4;
-    const int B_row = (tid / ( BLOCK_SIZE_N / 4 ));
-    const int B_col = (tid % ( BLOCK_SIZE_N / 4 )) * 4;
+    // threads needed to load one row of tile
+    // / 4 is because float4 is used
+    const int A_TILE_THREAD_PER_ROW = BLOCK_SIZE_K / 4;
+    const int B_TILE_THREAD_PER_ROW = BLOCK_SIZE_N / 4;
+    
+    // row number and col number that needs to be loaded by this thread
+    const int A_TILE_ROW_START = tid / A_TILE_THREAD_PER_ROW;
+    const int B_TILE_ROW_START = tid / B_TILE_THREAD_PER_ROW;
 
-    const int THREAD_NUM_PER_BLOCK = BLOCK_SIZE_M / THREAD_SIZE_Y * BLOCK_SIZE_N / THREAD_SIZE_X;
-    const int A_STRIDE = THREAD_NUM_PER_BLOCK / ( BLOCK_SIZE_K / 4 );
-    const int B_STRIDE = THREAD_NUM_PER_BLOCK / ( BLOCK_SIZE_N / 4 );
+    const int A_TILE_COL = tid % A_TILE_THREAD_PER_ROW * 4;
+    const int B_TILE_COL = tid % B_TILE_THREAD_PER_ROW * 4;
+    
+    // row stride that thread uses to load multiple rows of a tile
+    const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / A_TILE_THREAD_PER_ROW;
+    const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / B_TILE_THREAD_PER_ROW;
     
     // can not unroll since K can not be determined at this point
-    for (int tile_idx = 0 ; tile_idx < K ;  tile_idx += BLOCK_SIZE_K) {
+    for (int tile_idx = 0 ; tile_idx < K ; tile_idx += BLOCK_SIZE_K) {
         // load A from global memory to shared memory
         #pragma unroll
-        for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_STRIDE) {
-            FETCH_FLOAT4(As[A_row + i][A_col]) = FETCH_FLOAT4(A[OFFSET(
-                    BLOCK_SIZE_M * by + A_row + i, // row
-                    A_col + tile_idx, // col
+        for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
+            FETCH_FLOAT4(As[A_TILE_ROW_START + i][A_TILE_COL]) = FETCH_FLOAT4(A[OFFSET(
+                    BLOCK_SIZE_M * by + A_TILE_ROW_START + i, // row
+                    A_TILE_COL + tile_idx, // col
                     K )]);
         }
 
         // load B from global memory to shared memory
         #pragma unroll
-        for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_STRIDE) {
-            FETCH_FLOAT4(Bs[B_row + i][B_col]) = FETCH_FLOAT4(B[OFFSET(
-                    tile_idx + B_row + i, // row
-                    B_col + BLOCK_SIZE_N * bx, // col
+        for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
+            FETCH_FLOAT4(Bs[B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_FLOAT4(B[OFFSET(
+                    tile_idx + B_TILE_ROW_START + i, // row
+                    B_TILE_COL + BLOCK_SIZE_N * bx, // col
                     K )]);
         }
     
@@ -569,10 +574,10 @@ int main(int argc, char** argv) {
     double flopsPerMatrixMul = 2.0 * M * N * K;
 
     const int BLOCK_SIZE_M = 32;
-    const int BLOCK_SIZE_K = 16;
-    const int BLOCK_SIZE_N = 64;
+    const int BLOCK_SIZE_K = 32;
+    const int BLOCK_SIZE_N = 32;
     const int THREAD_SIZE_Y = 4;
-    const int THREAD_SIZE_X = 8;
+    const int THREAD_SIZE_X = 4;
     const bool ENABLE_DOUBLE_BUFFER = false;
     int k_block = K / BLOCK_SIZE_K;
     int stride = 2;
