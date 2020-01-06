@@ -173,3 +173,5 @@ my gemm: 2.477 msec
 ## Note
 * sparsity约为1%的时候, cusparse的性能可以超越cublas
 * 合理分配寄存器 尽可能让参数在编译器确定节省计算资源和寄存器数目
+* block总数过少无法利用SM?
+* occupancy为什么不考虑block数目?
