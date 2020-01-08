@@ -44,8 +44,6 @@ __global__ void MatrixMulCUDA6(
     const int tid = ty * bszx + tx;
 
     // shared memory
-    // __shared__ float As[BLOCK_SIZE_M * 2][BLOCK_SIZE_K];
-    // __shared__ float Bs[BLOCK_SIZE_K * 2][BLOCK_SIZE_N];
 
     __shared__ float As[BLOCK_SIZE_M][BLOCK_SIZE_K]; // avoid bank conflict
     __shared__ float Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
