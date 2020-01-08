@@ -7,16 +7,16 @@ TEST_SOURCE=./test
 
 BUILD=./builds
 STD=c++11
-# FLAGS=-gencode=arch=compute_35,code=sm_35 \
-#     -gencode=arch=compute_50,code=sm_50 \
-#     -gencode=arch=compute_52,code=sm_52 \
-#     -gencode=arch=compute_60,code=sm_60 \
-#     -gencode=arch=compute_61,code=sm_61 \
-#     -gencode=arch=compute_70,code=sm_70 \
-#     -gencode=arch=compute_75,code=sm_75 \
-#     -gencode=arch=compute_60,code=compute_60
-
-FLAGS=--ptxas-options=-v
+FLAGS=-gencode=arch=compute_35,code=sm_35 \
+    -gencode=arch=compute_50,code=sm_50 \
+    -gencode=arch=compute_52,code=sm_52 \
+    -gencode=arch=compute_60,code=sm_60 \
+    -gencode=arch=compute_61,code=sm_61 \
+    -gencode=arch=compute_70,code=sm_70 \
+    -gencode=arch=compute_75,code=sm_75 \
+    -gencode=arch=compute_60,code=compute_60 \
+	--ptxas-options=-v 
+# FLAGS=--ptxas-options=-v 
 
 all: gemm
 
