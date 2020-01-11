@@ -41,7 +41,7 @@ __global__ void reduce2() {
     printf("%d %d\n", threadIdx.x, value);
 }
 int main() {
-    reduce2<<< 1, 32 >>>();
+    reduce2<<< 1, 64 >>>();
     cudaDeviceSynchronize();
 
     return 0;

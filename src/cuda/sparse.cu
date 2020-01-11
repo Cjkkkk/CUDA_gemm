@@ -121,6 +121,7 @@ __global__ void MatrixMulCUDA5(
 
     __shared__ float As[BLOCK_SIZE_M][BLOCK_SIZE_K]; // avoid bank conflict
     __shared__ float Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
+
     // registers for C
     float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
     // registers for A and B
