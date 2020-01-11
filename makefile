@@ -35,6 +35,10 @@ gemm: $(BUILD)/dense.o
 sparse_gemm: $(BUILD)/utils.o $(BUILD)/sparse.o
 	$(CU) $(BUILD)/utils.o $(BUILD)/sparse.o -std=$(STD) -o $(BUILD)/sparse_gemm $(LIBS) $(FLAGS)
 
+shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o
+	$(CU) $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o -std=$(STD) -o $(BUILD)/shuffle_matrix
+	./builds/shuffle_matrix
+
 test: $(BUILD)/test.o $(BUILD)/utils.o
 	$(CC) $(BUILD)/utils.o $(BUILD)/test.o -std=$(STD) -o $(BUILD)/test -g
 	./builds/test

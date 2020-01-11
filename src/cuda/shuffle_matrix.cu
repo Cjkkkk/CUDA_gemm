@@ -1,4 +1,8 @@
 #include <stdio.h>
+#include <cuda_runtime.h>
+#include "bcsr.hpp"
+#include "utils.hpp"
+
 
 __device__ void swap(int* arr, int i, int j) {
     int temp = arr[i];
@@ -42,17 +46,36 @@ __global__ void bitonic_sort(float* mat, int N, int* idx) {
     }
 }
 
+
 int main() {
     float arr[64] = {
         0, 1, 1, 1, 1, 0, 1, 0, // 5
         1, 1, 1, 1, 1, 0, 1, 0, // 6
+
         0, 1, 1, 1, 0, 0, 1, 0, // 4
         0, 1, 0, 0, 1, 0, 1, 0, // 3
+
         0, 1, 1, 1, 1, 1, 1, 1, // 7
         0, 0, 0, 0, 0, 0, 0, 0, // 0
+
         0, 1, 0, 0, 0, 0, 1, 0, // 2
         0, 0, 0, 0, 0, 0, 1, 0, // 1
     };
+
+    float arr1[64] = {
+        0, 1, 1, 1, 1, 1, 1, 1, // 7
+        1, 1, 1, 1, 1, 0, 1, 0, // 6
+
+        0, 1, 1, 1, 1, 0, 1, 0, // 5
+        0, 1, 1, 1, 0, 0, 1, 0, // 4
+
+        0, 1, 0, 0, 1, 0, 1, 0, // 3
+        0, 1, 0, 0, 0, 0, 1, 0, // 2
+
+        0, 0, 0, 0, 0, 0, 1, 0, // 1
+        0, 0, 0, 0, 0, 0, 0, 0, // 0
+    };
+
     // 5 7 6 3 2 0 1 4
     int res[8] = {
         0, 1, 2, 3, 4, 5, 6, 7
@@ -60,6 +83,14 @@ int main() {
     float* d_arr;
     int* d_res;
     
+    bcsr bcsr_mat{8, 8, 2, 2};
+    cal_block(&bcsr_mat, arr);
+    printf("current nnz block num: %d\n", bcsr_mat.nnz_block_num);
+
+    bcsr bcsr_mat1{8, 8, 2, 2};
+    cal_block(&bcsr_mat1, arr1);
+    printf("current nnz block num: %d\n", bcsr_mat1.nnz_block_num);
+
     cudaMalloc(&d_arr, sizeof(float) * 64); 
     cudaMalloc(&d_res, sizeof(int) * 8);
     cudaMemcpy(d_arr, arr, sizeof(float) * 64, cudaMemcpyHostToDevice);
