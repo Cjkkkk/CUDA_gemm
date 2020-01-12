@@ -18,7 +18,7 @@ FLAGS=-gencode=arch=compute_35,code=sm_35 \
     -gencode=arch=compute_75,code=sm_75 \
     -gencode=arch=compute_60,code=compute_60 \
 	--ptxas-options=-v 
-
+DEP=$(CUDA_SOURCE)/encoding.cu $(CUDA_SOURCE)/dense.cu $(CUDA_SOURCE)/sparse.cu
 
 $(BUILD)/%.o: $(CPP_SOURCE)/%.cpp 
 	$(CC) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@
@@ -29,7 +29,7 @@ $(BUILD)/%.o: $(TEST_SOURCE)/%.cpp
 $(BUILD)/%.o: $(CUDA_SOURCE)/%.cu
 	$(CU) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@  $(FLAGS)
 
-$(BUILD)/%.o: $(MAIN_SOURCE)/%.cu
+$(BUILD)/%.o: $(MAIN_SOURCE)/%.cu $(DEP)
 	$(CU) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@  $(FLAGS)
 
 
@@ -45,9 +45,12 @@ benchmark_decoding: $(BUILD)/benchmark_decoding.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
 	sh ${SCRIPT_SOURCE}/benchmark_decoding.sh
 
-shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o
+shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o 
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@
 
 test: $(BUILD)/test.o $(BUILD)/utils.o
 	$(CC) $^ -std=$(STD) -o $(BUILD)/$@ -g
 	./builds/test
+
+dense_ptx: $(MAIN_SOURCE)/benchmark_dense.cu
+	$(CU) $^ $(INCLUDE_DIR) -ptx -src-in-ptx -lineinfo -gencode=arch=compute_60,code=compute_60 --ptxas-options=-v 
