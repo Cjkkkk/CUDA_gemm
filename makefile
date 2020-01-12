@@ -34,9 +34,15 @@ $(BUILD)/%.o: $(MAIN_SOURCE)/%.cu
 
 benchmark_dense: $(BUILD)/benchmark_dense.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
+	sh benchmark_dense.sh
 
 benchmark_sparse: $(BUILD)/utils.o $(BUILD)/benchmark_sparse.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
+	sh benchmark_sparse.sh
+
+benchmark_decoding: $(BUILD)/benchmark_decoding.o
+	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
+	sh benchmark_decoding.sh
 
 shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@
