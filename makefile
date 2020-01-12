@@ -5,6 +5,7 @@ CPP_SOURCE=./src/cpp
 CUDA_SOURCE=./src/cuda
 TEST_SOURCE=./test
 MAIN_SOURCE=./benchmark
+SCRIPT_SOURCE=./scripts
 INCLUDE_DIR=-I./src/cpp/include -I./src/cuda/include -I./src/cuda/
 BUILD=./builds
 STD=c++11
@@ -34,15 +35,15 @@ $(BUILD)/%.o: $(MAIN_SOURCE)/%.cu
 
 benchmark_dense: $(BUILD)/benchmark_dense.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
-	sh benchmark_dense.sh
+	sh ${SCRIPT_SOURCE}/benchmark_dense.sh
 
 benchmark_sparse: $(BUILD)/utils.o $(BUILD)/benchmark_sparse.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
-	sh benchmark_sparse.sh
+	sh ${SCRIPT_SOURCE}/benchmark_sparse.sh
 
 benchmark_decoding: $(BUILD)/benchmark_decoding.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
-	sh benchmark_decoding.sh
+	sh ${SCRIPT_SOURCE}/benchmark_decoding.sh
 
 shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@
