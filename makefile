@@ -4,7 +4,8 @@ LIBS=-lcublas -lcusparse
 CPP_SOURCE=./src/cpp
 CUDA_SOURCE=./src/cuda
 TEST_SOURCE=./test
-INCLUDE_DIR=-I./src/cpp/include -I./src/cuda/include 
+MAIN_SOURCE=./benchmark
+INCLUDE_DIR=-I./src/cpp/include -I./src/cuda/include -I./src/cuda/
 BUILD=./builds
 STD=c++11
 FLAGS=-gencode=arch=compute_35,code=sm_35 \
@@ -19,7 +20,7 @@ FLAGS=-gencode=arch=compute_35,code=sm_35 \
 
 
 $(BUILD)/%.o: $(CPP_SOURCE)/%.cpp 
-	$(CC) -std=$(STD) -c $< -o $@
+	$(CC) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@
 
 $(BUILD)/%.o: $(TEST_SOURCE)/%.cpp
 	$(CC) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@
@@ -27,27 +28,19 @@ $(BUILD)/%.o: $(TEST_SOURCE)/%.cpp
 $(BUILD)/%.o: $(CUDA_SOURCE)/%.cu
 	$(CU) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@  $(FLAGS)
 
-all: gemm
+$(BUILD)/%.o: $(MAIN_SOURCE)/%.cu
+	$(CU) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@  $(FLAGS)
 
-gemm: $(BUILD)/dense.o
-	$(CU) $(BUILD)/dense.o -std=$(STD) -o $(BUILD)/gemm $(LIBS) $(FLAGS)
 
-sparse_gemm: $(BUILD)/utils.o $(BUILD)/sparse.o
-	$(CU) $(BUILD)/utils.o $(BUILD)/sparse.o -std=$(STD) -o $(BUILD)/sparse_gemm $(LIBS) $(FLAGS)
+benchmark_dense: $(BUILD)/benchmark_dense.o
+	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
+
+benchmark_sparse: $(BUILD)/utils.o $(BUILD)/benchmark_sparse.o
+	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
 
 shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o
-	$(CU) $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o -std=$(STD) -o $(BUILD)/shuffle_matrix
-	./builds/shuffle_matrix
+	$(CU) $^ -std=$(STD) -o $(BUILD)/$@
 
 test: $(BUILD)/test.o $(BUILD)/utils.o
-	$(CC) $(BUILD)/utils.o $(BUILD)/test.o -std=$(STD) -o $(BUILD)/test -g
+	$(CC) $^ -std=$(STD) -o $(BUILD)/$@ -g
 	./builds/test
-
-benchmark_gemm: gemm
-	sh benchmark_gemm.sh
-
-benchmark_sparse_gemm: sparse_gemm
-	sh benchmark_sparse_gemm.sh
-
-gemm_test: gemm
-	$(BUILD)/gemm 64 64 64
