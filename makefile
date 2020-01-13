@@ -18,7 +18,7 @@ FLAGS=-gencode=arch=compute_35,code=sm_35 \
     -gencode=arch=compute_75,code=sm_75 \
     -gencode=arch=compute_60,code=compute_60 \
 	--ptxas-options=-v 
-DEP=$(CUDA_SOURCE)/encoding.cu $(CUDA_SOURCE)/dense.cu $(CUDA_SOURCE)/sparse.cu
+DEP=$(CUDA_SOURCE)/encoding.cu $(CUDA_SOURCE)/encoding_in_reg.cu $(CUDA_SOURCE)/dense.cu $(CUDA_SOURCE)/sparse.cu
 
 $(BUILD)/%.o: $(CPP_SOURCE)/%.cpp 
 	$(CC) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@
@@ -44,6 +44,11 @@ benchmark_sparse: $(BUILD)/utils.o $(BUILD)/benchmark_sparse.o
 benchmark_decoding: $(BUILD)/benchmark_decoding.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
 	sh ${SCRIPT_SOURCE}/benchmark_decoding.sh
+
+benchmark_decoding_in_reg: $(BUILD)/benchmark_decoding_in_reg.o
+	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
+	sh ${SCRIPT_SOURCE}/benchmark_decoding_in_reg.sh
+
 
 shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o 
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@

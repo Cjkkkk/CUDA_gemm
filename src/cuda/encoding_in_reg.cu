@@ -47,14 +47,14 @@ __global__ void MatrixMulCUDAEncoding(
 
     __shared__ float As[BLOCK_SIZE_M][BLOCK_SIZE_K]; // avoid bank conflict
     __shared__ float Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
-    __shared__ int ROW_PTR[BLOCK_SIZE_K * BLOCK_SIZE_K]; // add encoding 
+    int ROW_PTR[4]; // add encoding 
     
 
     #pragma unroll
-    for( int i = 0 ; i < BLOCK_SIZE_K * BLOCK_SIZE_K ; i ++ ){
+    for( int i = 0 ; i < 4 ; i ++ ){
     //use As as fake sparse encoding
-        ROW_PTR[i] = i % ( K / 128);
-    }
+        ROW_PTR[i] = K % 1024;
+    } 
 
     // registers for C
     float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
@@ -107,7 +107,7 @@ __global__ void MatrixMulCUDAEncoding(
             #pragma unroll
             for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
                 // add one decoding overhead
-                frag_a[thread_y] = reinterpret_cast<float*>(As)[ROW_PTR[(ty * THREAD_SIZE_Y + thread_y) * BLOCK_SIZE_K + k]];
+                frag_a[thread_y] = reinterpret_cast<float*>(As)[ROW_PTR[((ty * THREAD_SIZE_Y + thread_y) * BLOCK_SIZE_K + k)%4]];
             }
 
             // load B from shared memory to register
