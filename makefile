@@ -20,6 +20,7 @@ FLAGS=-gencode=arch=compute_35,code=sm_35 \
 	--ptxas-options=-v 
 DEP=$(CUDA_SOURCE)/encoding.cu $(CUDA_SOURCE)/encoding_in_reg.cu $(CUDA_SOURCE)/dense.cu $(CUDA_SOURCE)/sparse.cu
 
+
 $(BUILD)/%.o: $(CPP_SOURCE)/%.cpp 
 	$(CC) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@
 
