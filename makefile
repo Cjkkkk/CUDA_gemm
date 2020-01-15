@@ -33,17 +33,9 @@ $(BUILD)/%.o: $(MAIN_SOURCE)/%.cu $(DEP)
 	$(CU) -std=$(STD) $(INCLUDE_DIR) -c $< -o $@  $(FLAGS)
 
 
-benchmark_dense: $(BUILD)/benchmark_dense.o
+benchmark_%: $(BUILD)/benchmark_%.o $(BUILD)/utils.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
-	sh ${SCRIPT_SOURCE}/benchmark_dense.sh
-
-benchmark_sparse: $(BUILD)/utils.o $(BUILD)/benchmark_sparse.o
-	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
-	sh ${SCRIPT_SOURCE}/benchmark_sparse.sh
-
-benchmark_decoding: $(BUILD)/benchmark_decoding.o
-	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
-	sh ${SCRIPT_SOURCE}/benchmark_decoding.sh
+	sh ${SCRIPT_SOURCE}/$@.sh
 
 shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o 
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@
@@ -54,3 +46,7 @@ test: $(BUILD)/test.o $(BUILD)/utils.o
 
 dense_ptx: $(MAIN_SOURCE)/benchmark_dense.cu
 	$(CU) $^ $(INCLUDE_DIR) -ptx -src-in-ptx -lineinfo -gencode=arch=compute_60,code=compute_60 --ptxas-options=-v 
+
+.PHONY: clean
+clean:
+	rm $(BUILD)/*
