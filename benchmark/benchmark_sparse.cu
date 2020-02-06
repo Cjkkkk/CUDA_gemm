@@ -49,27 +49,33 @@ int main(int argc, char** argv) {
     int m_block = M / BLOCK_SIZE_M;
     int k_block = K / BLOCK_SIZE_K;
     int nnz_block = m_block * k_block * (Sparsity / 100.0);
+    nnz_block = nnz_block == 0 ? 1 : nnz_block;
     int stride = m_block * k_block / nnz_block;
     float alpha = 1.0;
     float beta = 0;
     
     // 生成A的数据
-    for( int i = 0; i < M * K; i++ ) {
-        int row = (i / K);
-        int col = (i % K);
-        int row_block = row / BLOCK_SIZE_M;
-        int col_block = col / BLOCK_SIZE_K;
-        if ((row_block * k_block + col_block) % stride == 0) h_A[i] = 1;
-        else {
-            h_A[i] = 0;
+    for( int i = 0; i < M; i ++ ) {
+        for ( int j = 0 ; j < K ; j ++) {
+            int row_block = i / BLOCK_SIZE_M;
+            int col_block = j / BLOCK_SIZE_K;
+            int block_id = row_block * k_block + col_block;
+            if (block_id % stride == 0) h_A[i * K + j] = block_id + 1;
+            else {
+                h_A[i * K + j] = 0;
+            }
         }
     }
 
     // 生成B的数据
-    for( int i = 0; i < K * N; i++ ) {
-        if ( i >= K * N / 2) h_B[i] = 2;
-        else {
-            h_B[i] = 0;
+    for( int i = 0 ; i < K; i ++ ) {
+        for ( int j = 0 ; j < N ; j ++) {
+            if ( i < K / 2 && j < N / 2) h_B[i * N + j] = 0;
+            else if ( i < K / 2 && j >= N / 2) h_B[i * N + j] = 1;
+            else if ( i >= K / 2 && j < N / 2) h_B[i * N + j] = 2;
+            else {
+                h_B[i * N + j] = 3;
+            }
         }
     }
     
