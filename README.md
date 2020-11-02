@@ -2,6 +2,8 @@
 A CUDA GEMM implementation
 
 ## algorithm
+**located in src/cuda/**
+
 * MatrixMulCUDA
     * one element of C is assigned one thread
     * global memory coalesce of B
@@ -21,6 +23,8 @@ A CUDA GEMM implementation
     * warp shuffle to enable C store coalesce
 
 ## experiments
+**located in benchmark/**
+
 My gemm : MatrixMulCUDA6
 My sparse block gemm : MatrixMulCUDA5
 
