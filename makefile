@@ -38,9 +38,6 @@ benchmark_%: $(BUILD)/benchmark_%.o $(BUILD)/utils.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
 	sh ${SCRIPT_SOURCE}/$@.sh
 
-shuffle_matrix: $(BUILD)/utils.o $(BUILD)/shuffle_matrix.o 
-	$(CU) $^ -std=$(STD) -o $(BUILD)/$@
-
 test: $(BUILD)/test.o $(BUILD)/utils.o
 	$(CC) $^ -std=$(STD) -o $(BUILD)/$@ -g
 	./builds/test
