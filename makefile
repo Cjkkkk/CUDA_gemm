@@ -16,8 +16,9 @@ FLAGS=-gencode=arch=compute_35,code=sm_35 \
     -gencode=arch=compute_61,code=sm_61 \
     -gencode=arch=compute_70,code=sm_70 \
     -gencode=arch=compute_75,code=sm_75 \
-    -gencode=arch=compute_60,code=compute_60 
-DEP=$(CUDA_SOURCE)/encoding.cu $(CUDA_SOURCE)/encoding_in_reg.cu $(CUDA_SOURCE)/dense.cu $(CUDA_SOURCE)/sparse.cu
+    -gencode=arch=compute_60,code=compute_60 \
+	--ptxas-options=-v 
+DEP=$(CUDA_SOURCE)/encoding.cu $(CUDA_SOURCE)/encoding_in_reg.cu $(CUDA_SOURCE)/dense.cu $(CUDA_SOURCE)/sparse.cu $(CUDA_SOURCE)/quantization.cu
 
 
 $(BUILD)/%.o: $(CPP_SOURCE)/%.cpp 
