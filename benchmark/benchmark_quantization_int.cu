@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     const int THREAD_SIZE_X = 4;
     const int THREAD_SIZE_Y = 4;
     const bool ENABLE_DOUBLE_BUFFER = false;
-    const int bit_width = 8;
+    const int BIT_WIDTH = 8;
     int k_block = K / BLOCK_SIZE_K;
     int stride = 2;
 
@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
     for (int run = 0 ; run < nIter; run ++ ) {
         dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
         dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
-        MatrixMulCUDAQuantize<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, bit_width, ENABLE_DOUBLE_BUFFER> 
+        MatrixMulCUDAQuantize<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, BIT_WIDTH, ENABLE_DOUBLE_BUFFER> 
         <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
 
     }

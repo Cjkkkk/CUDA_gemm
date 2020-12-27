@@ -21,7 +21,7 @@ template <
     const int BLOCK_SIZE_N,  // height of block of C that each thread block calculate
     const int THREAD_SIZE_Y, // height of block of C that each thread calculate
     const int THREAD_SIZE_X,  // width of block of C that each thread calculate
-    const int bit_width,    // real datatype
+    const int BIT_WIDTH,    // real datatype
     const bool ENABLE_DOUBLE_BUFFER // whether enable double buffering or not
     > 
 __global__ void MatrixMulCUDAQuantize( 
