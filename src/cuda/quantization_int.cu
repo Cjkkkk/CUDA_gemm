@@ -12,13 +12,16 @@
 #define OFFSET(row, col, ld) ((row) * (ld) + (col))
 
 // transfer uint
-#define FETCH_INT4(pointer) (reinterpret_cast<int4*>(&(pointer))[0])
+#define FETCH_UINT4(pointer) (reinterpret_cast<uint4*>(&(pointer))[0])
+#define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
+#define FETCH_UINT(pointer) (reinterpret_cast<uint32_t*>(&(pointer))[0])
 template <
     const int BLOCK_SIZE_M,  // width of block of C that each thread block calculate
     const int BLOCK_SIZE_K,  // height of block of A that each thread block load into shared memory
     const int BLOCK_SIZE_N,  // height of block of C that each thread block calculate
     const int THREAD_SIZE_Y, // height of block of C that each thread calculate
     const int THREAD_SIZE_X,  // width of block of C that each thread calculate
+    const int bit_width,    // real datatype
     const bool ENABLE_DOUBLE_BUFFER // whether enable double buffering or not
     > 
 __global__ void MatrixMulCUDAQuantize( 
@@ -48,15 +51,15 @@ __global__ void MatrixMulCUDAQuantize(
     __shared__ uint8_t As[BLOCK_SIZE_M][BLOCK_SIZE_K]; // avoid bank conflict
     __shared__ uint8_t Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
     // registers for C
-    uint8_t accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
+    float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
     // registers for A and B
     uint8_t frag_a[THREAD_SIZE_Y];
     uint8_t frag_b[THREAD_SIZE_X];
     
     // threads needed to load one row of tile
     const int per_load_element = 16; // int4 = 16 byte
-    const int A_TILE_THREAD_PER_ROW = BLOCK_SIZE_K / per_load_element; // 4
-    const int B_TILE_THREAD_PER_ROW = BLOCK_SIZE_N / per_load_element; // 4
+    const int A_TILE_THREAD_PER_ROW = BLOCK_SIZE_K / per_load_element; // 2
+    const int B_TILE_THREAD_PER_ROW = BLOCK_SIZE_N / per_load_element; // 2
     
     // row number and col number that needs to be loaded by this thread
     const int A_TILE_ROW_START = tid / A_TILE_THREAD_PER_ROW; 
@@ -66,27 +69,27 @@ __global__ void MatrixMulCUDAQuantize(
     const int B_TILE_COL = tid % B_TILE_THREAD_PER_ROW * per_load_element;
     
     // row stride that thread uses to load multiple rows of a tile
-    const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / A_TILE_THREAD_PER_ROW; // 64 / 4 = 4
-    const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / B_TILE_THREAD_PER_ROW; // 64 / 4 = 4
-    
+    const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / A_TILE_THREAD_PER_ROW; // 64 / 2 = 32
+    const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / B_TILE_THREAD_PER_ROW; // 64 / 2 = 32
+
     // can not unroll since K can not be determined at this point
     for (int tile_idx = 0 ; tile_idx < K ; tile_idx += BLOCK_SIZE_K) {
         // load A from global memory to shared memory
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
-            FETCH_INT4(As[A_TILE_ROW_START + i][A_TILE_COL]) = FETCH_INT4(A[OFFSET(
-                    BLOCK_SIZE_M * by + A_TILE_ROW_START + i, // row
-                    A_TILE_COL + tile_idx, // col
-                    K ) / 4]);
+            FETCH_UINT4(As[A_TILE_ROW_START + i][A_TILE_COL]) = FETCH_UINT4(A[OFFSET(
+                BLOCK_SIZE_M * by + A_TILE_ROW_START + i, // row
+                A_TILE_COL + tile_idx, // col
+                K ) / 4]);
         }
 
         // load B from global memory to shared memory
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
-            FETCH_INT4(Bs[B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_INT4(B[OFFSET(
-                    tile_idx + B_TILE_ROW_START + i, // row
-                    B_TILE_COL + BLOCK_SIZE_N * bx, // col
-                    K ) / 4]);
+            FETCH_UINT4(Bs[B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_UINT4(B[OFFSET(
+                tile_idx + B_TILE_ROW_START + i, // row
+                B_TILE_COL + BLOCK_SIZE_N * bx, // col
+                K ) / 4 ]);
         }
     
         __syncthreads();
@@ -102,7 +105,7 @@ __global__ void MatrixMulCUDAQuantize(
             // load B from shared memory to register
             #pragma unroll
             for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x += 4) {
-                FETCH_INT4(frag_b[thread_x]) = FETCH_INT4(Bs[k][THREAD_SIZE_X * tx + thread_x]);
+                FETCH_UINT(frag_b[thread_x]) = FETCH_UINT(Bs[k][THREAD_SIZE_X * tx + thread_x]);
             }
             
             #pragma unroll
@@ -112,23 +115,23 @@ __global__ void MatrixMulCUDAQuantize(
                     accum[thread_y][thread_x] += (1.0 * frag_a[thread_y]) * (1.0 * frag_b[thread_x]);
                 }
             }
-            
         }
         __syncthreads();
     }
 
     // store back to C
+    uint32_t res = 0;
     #pragma unroll
     for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
-        // #pragma unroll
-        // for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-        const int thread_x = 0;
-        FETCH_INT4(C[OFFSET(
+        #pragma unroll
+        for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
+            uint8_t r = (accum[thread_y][thread_x] * 1.0);
+            res |= (r << (8 * thread_x));
+        }
+        FETCH_UINT(C[OFFSET(
             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
-            BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + thread_x,
-            N) / 4 ]) = FETCH_INT4(accum[thread_y][thread_x]);
-            
-        //}
+            BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + 0,
+            N) / 4 ]) = res;
     }
 }
 

@@ -6,7 +6,7 @@
 #include <cublas_v2.h>
 
 #include "dense_help_func.hpp"
-#include "quantization.cu"
+#include "quantization_float.cu"
 
 int main(int argc, char** argv) {
     if (argc != 4) {
@@ -49,12 +49,13 @@ int main(int argc, char** argv) {
     double gigaFlops[2] = {0, 0};
     double flopsPerMatrixMul = 2.0 * M * N * K;
 
-    const int BLOCK_SIZE_M = 64;
-    const int BLOCK_SIZE_K = 64;
-    const int BLOCK_SIZE_N = 64;
-    const int THREAD_SIZE_X = 16;
+    const int BLOCK_SIZE_M = 32;
+    const int BLOCK_SIZE_K = 32;
+    const int BLOCK_SIZE_N = 32;
+    const int THREAD_SIZE_X = 4;
     const int THREAD_SIZE_Y = 4;
     const bool ENABLE_DOUBLE_BUFFER = false;
+    const int bit_width = 8;
     int k_block = K / BLOCK_SIZE_K;
     int stride = 2;
 
@@ -65,7 +66,7 @@ int main(int argc, char** argv) {
         int row_block = row / BLOCK_SIZE_M;
         int col_block = col / BLOCK_SIZE_K;
         if ((row_block * k_block + col_block) % stride == 0) {
-            h_A[i/4] = 1;
+            h_A[i/4] = 0x01010101;
             fh_A[i] = 1;
         }
         else {
@@ -77,7 +78,7 @@ int main(int argc, char** argv) {
     // 生成B的数据
     for( int i = 0; i < K * N; i++ ) {
         if ( i >= K * N / 2) {
-            h_B[i/4] = 2;
+            h_B[i/4] = 0x02020202;
             fh_B[i] = 2;
         }
         else {
@@ -101,7 +102,7 @@ int main(int argc, char** argv) {
     for (int run = 0 ; run < nIter; run ++ ) {
         dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
         dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
-        MatrixMulCUDAQuantize<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, ENABLE_DOUBLE_BUFFER> 
+        MatrixMulCUDAQuantize<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, bit_width, ENABLE_DOUBLE_BUFFER> 
         <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
 
     }
