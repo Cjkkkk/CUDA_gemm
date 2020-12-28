@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
         double rel_err = abs_err / abs_val / dot_length;
         if (rel_err > eps) {
             printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n",
-                    i, (float)h_C[i], fh_C[col * M + row], eps);
+                    i, (float)h_C[i/4], fh_C[col * M + row], eps);
             correct = false;
             break;
         }

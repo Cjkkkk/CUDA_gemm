@@ -136,18 +136,15 @@ __global__ void MatrixMulCUDAQuantize(
     // store back to C
     #pragma unroll
     for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
-        uint32_t res = 0;
         // pack
         #pragma unroll
         for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-            uint32_t r = __float2uint_rd(accum[thread_y][thread_x] * 1.0);
-            data_a[thread_x] = (r & 0x000000ff) << (8 * thread_x);
+            data_a[thread_x] = __float2uint_rd(accum[thread_y][thread_x] * 1.0);
         }
-        res = data_a[0] | data_a[1] | data_a[2] | data_a[3];
         FETCH_UINT(C[OFFSET(
             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
             BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + 0,
-            N) / 4 ]) = res;
+            N) / 4 ]) = FETCH_UINT(data_a[0]);
     }
 }
 
