@@ -51,7 +51,7 @@ __global__ void MatrixMulCUDAQuantize(
     __shared__ uint8_t As[BLOCK_SIZE_M][BLOCK_SIZE_K]; // avoid bank conflict
     __shared__ uint8_t Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
     // registers for C
-    float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
+    uint32_t accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
     // registers for A and B
     uint8_t frag_a[THREAD_SIZE_Y];
     uint8_t frag_b[THREAD_SIZE_X];
@@ -112,7 +112,7 @@ __global__ void MatrixMulCUDAQuantize(
             for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
                 #pragma unroll
                 for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-                    accum[thread_y][thread_x] += (1.0 * frag_a[thread_y]) * (1.0 * frag_b[thread_x]);
+                    accum[thread_y][thread_x] += frag_a[thread_y] * frag_b[thread_x];
                 }
             }
         }
@@ -125,12 +125,11 @@ __global__ void MatrixMulCUDAQuantize(
     for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
         #pragma unroll
         for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-            uint8_t r = (accum[thread_y][thread_x] * 1.0);
-            res |= (r << (8 * thread_x));
+            res |= (accum[thread_y][thread_x] & 0x000000ff) << (8 * thread_x);
         }
         FETCH_UINT(C[OFFSET(
             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
-            BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + 0,
+            BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X,
             N) / 4 ]) = res;
     }
 }
