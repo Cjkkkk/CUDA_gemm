@@ -71,28 +71,29 @@ __global__ void MatrixMulCUDAQuantize(
     // row stride that thread uses to load multiple rows of a tile
     const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / A_TILE_THREAD_PER_ROW; // 64 / 2 = 32
     const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / B_TILE_THREAD_PER_ROW; // 64 / 2 = 32
-    uint32_t data[4];
+    uint8_t data_a[16];
+    uint8_t data_b[16];
 
     // can not unroll since K can not be determined at this point
     for (int tile_idx = 0 ; tile_idx < K ; tile_idx += BLOCK_SIZE_K) {
         // load A from global memory to shared memory
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
-            FETCH_UINT4(data) = FETCH_UINT4(A[OFFSET(
+            FETCH_UINT4(data_a) = FETCH_UINT4(A[OFFSET(
                 BLOCK_SIZE_M * by + A_TILE_ROW_START + i, // row
                 A_TILE_COL + tile_idx, // col
                 K ) / 4]);
             // unpack
             #pragma unroll
             for ( int j = 0 ; j < 16 ; j += 1) {
-                As[A_TILE_ROW_START + i][A_TILE_COL + j] = __uint2float_rd((data[j / 4] >> ((j % 4) * 8)) & 0x000000ff) * 1.0; 
+                As[A_TILE_ROW_START + i][A_TILE_COL + j] = __uint2float_rd(data_a[j]) * 1.0; 
             }
         }
 
         // load B from global memory to shared memory
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
-            FETCH_UINT4(data) = FETCH_UINT4(B[OFFSET(
+            FETCH_UINT4(data_b) = FETCH_UINT4(B[OFFSET(
                 tile_idx + B_TILE_ROW_START + i, // row
                 B_TILE_COL + BLOCK_SIZE_N * bx, // col
                 K ) / 4 ]);
@@ -100,7 +101,7 @@ __global__ void MatrixMulCUDAQuantize(
             // unpack
             #pragma unroll
             for ( int j = 0 ; j < 16 ; j += 1) {
-                Bs[B_TILE_ROW_START + i][B_TILE_COL + j] = __uint2float_rd((data[j / 4] >> ((j % 4) * 8)) & 0x000000ff) * 1.0;
+                Bs[B_TILE_ROW_START + i][B_TILE_COL + j] = __uint2float_rd(data_b[j]) * 1.0; 
             }
         }
     
@@ -133,16 +134,16 @@ __global__ void MatrixMulCUDAQuantize(
     }
 
     // store back to C
-    uint32_t res = 0;
     #pragma unroll
     for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
+        uint32_t res = 0;
         // pack
         #pragma unroll
         for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
             uint32_t r = __float2uint_rd(accum[thread_y][thread_x] * 1.0);
-            data[thread_x] = (r & 0x000000ff) << (8 * thread_x);
+            data_a[thread_x] = (r & 0x000000ff) << (8 * thread_x);
         }
-        res = data[0] | data[1] | data[2] | data[3];
+        res = data_a[0] | data_a[1] | data_a[2] | data_a[3];
         FETCH_UINT(C[OFFSET(
             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
             BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + 0,
