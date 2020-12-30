@@ -24,7 +24,7 @@ template <
     const int BIT_WIDTH,    // real datatype
     const bool ENABLE_DOUBLE_BUFFER // whether enable double buffering or not
     > 
-__global__ void MatrixMulCUDAQuantize( 
+__global__ void MatrixMulCUDAQuantize8bit( 
     uint32_t * __restrict__ A,
     uint32_t * __restrict__ B,
     uint32_t * __restrict__ C, 
@@ -51,10 +51,10 @@ __global__ void MatrixMulCUDAQuantize(
     __shared__ float As[BLOCK_SIZE_M][BLOCK_SIZE_K]; // avoid bank conflict
     __shared__ float Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
     // registers for C
-    float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
+    register float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
     // registers for A and B
-    float frag_a[THREAD_SIZE_Y];
-    float frag_b[THREAD_SIZE_X];
+    register float frag_a[THREAD_SIZE_Y];
+    register float frag_b[THREAD_SIZE_X];
     
     // threads needed to load one row of tile
     const int per_load_element = 16; // int4 = 16 byte
@@ -128,7 +128,6 @@ __global__ void MatrixMulCUDAQuantize(
                     accum[thread_y][thread_x] += frag_a[thread_y] * frag_b[thread_x];
                 }
             }
-            
         }
         __syncthreads();
     }
@@ -139,12 +138,12 @@ __global__ void MatrixMulCUDAQuantize(
         // pack
         #pragma unroll
         for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-            data_a[thread_x] = __float2uint_rd(accum[thread_y][thread_x] * 1.0);
+            data_a[thread_y * THREAD_SIZE_Y + thread_x] = __float2uint_rd(accum[thread_y][thread_x] * 1.0);
         }
         FETCH_UINT(C[OFFSET(
             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
             BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + 0,
-            N) / 4 ]) = FETCH_UINT(data_a[0]);
+            N) / 4 ]) = FETCH_UINT(data_a[thread_y]);
     }
 }
 

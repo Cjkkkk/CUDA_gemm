@@ -6,7 +6,7 @@
 #include <cublas_v2.h>
 
 #include "dense_help_func.hpp"
-#include "quantization_float.cu"
+#include "quantization_8bit.cu"
 
 int main(int argc, char** argv) {
     if (argc != 4) {
@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
     for (int run = 0 ; run < nIter; run ++ ) {
         dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
         dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
-        MatrixMulCUDAQuantize<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, BIT_WIDTH, ENABLE_DOUBLE_BUFFER> 
+        MatrixMulCUDAQuantize8bit<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, BIT_WIDTH, ENABLE_DOUBLE_BUFFER> 
         <<< dimGrid, dimBlock >>>((uint32_t*)d_A, (uint32_t*)d_B, (uint32_t*)d_C, K, N);
     }
     checkCudaErrors(cudaEventRecord(stop));
