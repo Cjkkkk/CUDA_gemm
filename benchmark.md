@@ -1,7 +1,7 @@
 ## experiments
 **located in benchmark/**
 
-My gemm : MatrixMulCUDA6
+My gemm : MatrixMulCUDA6 \
 My sparse block gemm : MatrixMulCUDA5
 
 ----- benchmark size: 256 -----
@@ -147,7 +147,7 @@ cublas: 2.244 msec
 my gemm: 2.477 msec
 ```
 
-My gemm : MatrixMulCUDA6
+My gemm : MatrixMulCUDA6 \
 My non-uniform quantized 8 bit gemm : MatrixMulCUDAQuantize8bit
 ```
 ----- benchmark size: 256 -----
