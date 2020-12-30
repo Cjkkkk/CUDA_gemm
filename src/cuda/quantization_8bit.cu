@@ -12,9 +12,9 @@
 #define OFFSET(row, col, ld) ((row) * (ld) + (col))
 
 // transfer uint
-#define FETCH_UINT4(pointer) (reinterpret_cast<uint4*>(&(pointer))[0])
-#define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
-#define FETCH_UINT(pointer) (reinterpret_cast<uint32_t*>(&(pointer))[0])
+#define FETCH_UINT32x4(pointer) (reinterpret_cast<uint4*>(&(pointer))[0])
+#define FETCH_FLOAT32x4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
+#define FETCH_UINT32(pointer) (reinterpret_cast<uint32_t*>(&(pointer))[0])
 template <
     const int BLOCK_SIZE_M,  // width of block of C that each thread block calculate
     const int BLOCK_SIZE_K,  // height of block of A that each thread block load into shared memory
@@ -79,7 +79,7 @@ __global__ void MatrixMulCUDAQuantize8bit(
         // load A from global memory to shared memory
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
-            FETCH_UINT4(data_a) = FETCH_UINT4(A[OFFSET(
+            FETCH_UINT32x4(data_a) = FETCH_UINT32x4(A[OFFSET(
                 BLOCK_SIZE_M * by + A_TILE_ROW_START + i, // row
                 A_TILE_COL + tile_idx, // col
                 K ) / 4]);
@@ -93,7 +93,7 @@ __global__ void MatrixMulCUDAQuantize8bit(
         // load B from global memory to shared memory
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
-            FETCH_UINT4(data_b) = FETCH_UINT4(B[OFFSET(
+            FETCH_UINT32x4(data_b) = FETCH_UINT32x4(B[OFFSET(
                 tile_idx + B_TILE_ROW_START + i, // row
                 B_TILE_COL + BLOCK_SIZE_N * bx, // col
                 K ) / 4 ]);
@@ -118,7 +118,7 @@ __global__ void MatrixMulCUDAQuantize8bit(
             // load B from shared memory to register
             #pragma unroll
             for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x += 4) {
-                FETCH_FLOAT4(frag_b[thread_x]) = FETCH_FLOAT4(Bs[k][THREAD_SIZE_X * tx + thread_x]);
+                FETCH_FLOAT32x4(frag_b[thread_x]) = FETCH_FLOAT32x4(Bs[k][THREAD_SIZE_X * tx + thread_x]);
             }
             
             #pragma unroll
@@ -140,10 +140,10 @@ __global__ void MatrixMulCUDAQuantize8bit(
         for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
             data_a[thread_y * THREAD_SIZE_Y + thread_x] = __float2uint_rd(accum[thread_y][thread_x] * 1.0);
         }
-        FETCH_UINT(C[OFFSET(
+        FETCH_UINT32(C[OFFSET(
             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
             BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + 0,
-            N) / 4 ]) = FETCH_UINT(data_a[thread_y]);
+            N) / 4 ]) = FETCH_UINT32(data_a[thread_y]);
     }
 }
 
