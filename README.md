@@ -1,5 +1,5 @@
 ## introduction
-A CUDA GEMM implementation
+A simple high performance CUDA GEMM, Block Sparse GEMM and Non-uniform Quantized GEMM implementation.
 
 ## algorithm
 **located in src/cuda/**
