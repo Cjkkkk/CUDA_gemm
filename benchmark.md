@@ -146,3 +146,62 @@ cusparse(csr): 1.227 msec
 cublas: 2.244 msec
 my gemm: 2.477 msec
 ```
+
+My gemm : MatrixMulCUDA6
+My non-uniform quantized 8 bit gemm : MatrixMulCUDAQuantize8bit
+```
+----- benchmark size: 256 -----
+My gemm Performance= 2066.61 GFlop/s, Time= 0.016 msec, Size= 33554432 Ops,
+My gemm1 Performance= 1777.07 GFlop/s, Time= 0.019 msec, Size= 33554432 Ops,
+Result= PASS
+ratio= 1.162932
+----- benchmark size: 512 -----
+My gemm Performance= 4851.65 GFlop/s, Time= 0.055 msec, Size= 268435456 Ops,
+My gemm1 Performance= 4595.69 GFlop/s, Time= 0.058 msec, Size= 268435456 Ops,
+Error! Matrix[00000]=0.00000000, ref=256.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 1.055696
+----- benchmark size: 1024 -----
+My gemm Performance= 4806.85 GFlop/s, Time= 0.447 msec, Size= 2147483648 Ops,
+My gemm1 Performance= 5792.35 GFlop/s, Time= 0.371 msec, Size= 2147483648 Ops,
+Error! Matrix[00000]=0.00000000, ref=512.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 0.829862
+----- benchmark size: 1536 -----
+My gemm Performance= 6305.01 GFlop/s, Time= 1.150 msec, Size= 7247757312 Ops,
+My gemm1 Performance= 6878.28 GFlop/s, Time= 1.054 msec, Size= 7247757312 Ops,
+Error! Matrix[00000]=0.00000000, ref=768.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 0.916654
+----- benchmark size: 2048 -----
+My gemm Performance= 6446.45 GFlop/s, Time= 2.665 msec, Size= 17179869184 Ops,
+My gemm1 Performance= 7064.28 GFlop/s, Time= 2.432 msec, Size= 17179869184 Ops,
+Error! Matrix[00000]=0.00000000, ref=1024.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 0.912542
+----- benchmark size: 2560 -----
+My gemm Performance= 6569.60 GFlop/s, Time= 5.108 msec, Size= 33554432000 Ops,
+My gemm1 Performance= 7133.01 GFlop/s, Time= 4.704 msec, Size= 33554432000 Ops,
+Error! Matrix[00000]=0.00000000, ref=1280.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 0.921014
+----- benchmark size: 3072 -----
+My gemm Performance= 6681.76 GFlop/s, Time= 8.678 msec, Size= 57982058496 Ops,
+My gemm1 Performance= 7213.02 GFlop/s, Time= 8.039 msec, Size= 57982058496 Ops,
+Error! Matrix[00000]=0.00000000, ref=1536.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 0.926348
+----- benchmark size: 3584 -----
+My gemm Performance= 6788.71 GFlop/s, Time= 13.563 msec, Size= 92073361408 Ops,
+My gemm1 Performance= 7202.32 GFlop/s, Time= 12.784 msec, Size= 92073361408 Ops,
+Error! Matrix[00000]=0.00000000, ref=1792.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 0.942572
+----- benchmark size: 4096 -----
+My gemm Performance= 6722.88 GFlop/s, Time= 20.443 msec, Size= 137438953472 Ops,
+My gemm1 Performance= 7246.33 GFlop/s, Time= 18.967 msec, Size= 137438953472 Ops,
+Error! Matrix[00000]=0.00000000, ref=2048.00000000 error term is > 1.000000E-06
+Result= FAIL
+ratio= 0.927763
+rm builds/benchmark_quantization.o
+```

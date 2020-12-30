@@ -19,14 +19,14 @@ int main(int argc, char** argv) {
     size_t N = atoi(argv[3]);
 
     // for uint8
-    size_t bytes = sizeof(uint32_t) * M * K / 4;
-    uint32_t* h_A = (uint32_t*)malloc(bytes);
-    uint32_t* h_B = (uint32_t*)malloc(bytes);
-    uint32_t* h_C = (uint32_t*)malloc(bytes);
+    size_t bytes = sizeof(uint8_t) * M * K;
+    uint8_t* h_A = (uint8_t*)malloc(bytes);
+    uint8_t* h_B = (uint8_t*)malloc(bytes);
+    uint8_t* h_C = (uint8_t*)malloc(bytes);
 
-    uint32_t* d_A;
-    uint32_t* d_B;
-    uint32_t* d_C;
+    uint8_t* d_A;
+    uint8_t* d_B;
+    uint8_t* d_C;
 
     checkCudaErrors(cudaMalloc(&d_A, bytes));
     checkCudaErrors(cudaMalloc(&d_B, bytes));
@@ -67,11 +67,11 @@ int main(int argc, char** argv) {
         int row_block = row / BLOCK_SIZE_M;
         int col_block = col / BLOCK_SIZE_K;
         if ((row_block * k_block + col_block) % stride == 0) {
-            h_A[i/4] = 0x01010101;
+            h_A[i] = 1;
             fh_A[i] = 1;
         }
         else {
-            h_A[i/4] = 0;
+            h_A[i] = 0;
             fh_A[i] = 0;
         }
     }
@@ -79,11 +79,11 @@ int main(int argc, char** argv) {
     // 生成B的数据
     for( int i = 0; i < K * N; i++ ) {
         if ( i >= K * N / 2) {
-            h_B[i/4] = 0x02020202;
+            h_B[i] = 2;
             fh_B[i] = 2;
         }
         else {
-            h_B[i/4] = 0;
+            h_B[i] = 0;
             fh_B[i] = 0;
         }
     }
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
         dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
         dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
         MatrixMulCUDAQuantize8bit<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, BIT_WIDTH, ENABLE_DOUBLE_BUFFER> 
-        <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
+        <<< dimGrid, dimBlock >>>((uint32_t*)d_A, (uint32_t*)d_B, (uint32_t*)d_C, K, N);
 
     }
     checkCudaErrors(cudaEventRecord(stop));
@@ -156,13 +156,13 @@ int main(int argc, char** argv) {
     for (int i = 0; i < M * N; i++) {
         int row = i / N;
         int col = i % N;
-        double abs_err = fabs(h_C[i/4] - fh_C[col * M + row]);
+        double abs_err = fabs(h_C[i] - fh_C[row * N + col]);
         double dot_length = M;
-        double abs_val = fabs(h_C[i/4]);
+        double abs_val = fabs(h_C[i]);
         double rel_err = abs_err / abs_val / dot_length;
         if (rel_err > eps) {
             printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n",
-                    i, (float)h_C[i], fh_C[col * M + row], eps);
+                    i, (float)h_C[i], fh_C[row * N + col], eps);
             correct = false;
             break;
         }
