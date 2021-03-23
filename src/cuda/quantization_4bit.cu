@@ -96,7 +96,7 @@ __global__ void MatrixMulCUDAQuantize4bit(
             FETCH_UINT4(data_b) = FETCH_UINT4(B[OFFSET(
                 tile_idx + B_TILE_ROW_START + i, // row
                 B_TILE_COL + BLOCK_SIZE_N * bx, // col
-                K ) / 4 ]);
+                N ) / 4 ]);
             
             // unpack
             #pragma unroll

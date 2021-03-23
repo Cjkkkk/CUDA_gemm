@@ -89,7 +89,7 @@ __global__ void MatrixMulCUDAQuantize(
             FETCH_UINT4(Bs[B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_UINT4(B[OFFSET(
                 tile_idx + B_TILE_ROW_START + i, // row
                 B_TILE_COL + BLOCK_SIZE_N * bx, // col
-                K ) / 4 ]);
+                N ) / 4 ]);
         }
     
         __syncthreads();
