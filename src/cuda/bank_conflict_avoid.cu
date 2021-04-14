@@ -82,7 +82,7 @@ __global__ void BankConflictAvoidMatMul(
             FETCH_FLOAT4(Bs[B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_FLOAT4(B[OFFSET(
                     tile_idx + B_TILE_ROW_START + i, // row
                     B_TILE_COL + BLOCK_SIZE_N * bx, // col
-                    K )]);
+                    N )]);
         }
     
         __syncthreads();
