@@ -8,6 +8,11 @@
 #include "dense_help_func.hpp"
 #include "quantization_8bit.cu"
 
+#define ASIZE(type) (sizeof(type) * M * K)
+#define BSIZE(type) (sizeof(type) * K * N)
+#define CSIZE(type) (sizeof(type) * M * N)
+
+
 int main(int argc, char** argv) {
     if (argc != 4) {
         printf("usage: ./main [M] [K] [N]\n");
@@ -18,32 +23,30 @@ int main(int argc, char** argv) {
     size_t N = atoi(argv[3]);
 
     // for uint8
-    size_t bytes = sizeof(uint8_t) * M * K;
-    uint8_t* h_A = (uint8_t*)malloc(bytes);
-    uint8_t* h_B = (uint8_t*)malloc(bytes);
-    uint8_t* h_C = (uint8_t*)malloc(bytes);
+    uint8_t* h_A = (uint8_t*)malloc(ASIZE(uint8_t));
+    uint8_t* h_B = (uint8_t*)malloc(BSIZE(uint8_t));
+    uint8_t* h_C = (uint8_t*)malloc(CSIZE(uint8_t));
 
     uint8_t* d_A;
     uint8_t* d_B;
     uint8_t* d_C;
 
-    checkCudaErrors(cudaMalloc(&d_A, bytes));
-    checkCudaErrors(cudaMalloc(&d_B, bytes));
-    checkCudaErrors(cudaMalloc(&d_C, bytes));
+    checkCudaErrors(cudaMalloc(&d_A, ASIZE(uint8_t)));
+    checkCudaErrors(cudaMalloc(&d_B, BSIZE(uint8_t)));
+    checkCudaErrors(cudaMalloc(&d_C, CSIZE(uint8_t)));
 
     // for float
-    size_t fbytes = sizeof(float) * M * K;
-    float* fh_A = (float*)malloc(fbytes);
-    float* fh_B = (float*)malloc(fbytes);
-    float* fh_C = (float*)malloc(fbytes);
+    float* fh_A = (float*)malloc(ASIZE(float));
+    float* fh_B = (float*)malloc(BSIZE(float));
+    float* fh_C = (float*)malloc(CSIZE(float));
 
     float* fd_A;
     float* fd_B;
     float* fd_C;
 
-    checkCudaErrors(cudaMalloc(&fd_A, fbytes));
-    checkCudaErrors(cudaMalloc(&fd_B, fbytes));
-    checkCudaErrors(cudaMalloc(&fd_C, fbytes));
+    checkCudaErrors(cudaMalloc(&fd_A, ASIZE(float)));
+    checkCudaErrors(cudaMalloc(&fd_B, BSIZE(float)));
+    checkCudaErrors(cudaMalloc(&fd_C, CSIZE(float)));
 
     double msecPerMatrixMul[2] = {0, 0};
     double gigaFlops[2] = {0, 0};
@@ -87,8 +90,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_A, h_A, ASIZE(uint8_t), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_B, h_B, BSIZE(uint8_t), cudaMemcpyHostToDevice));
     
     cudaEvent_t start, stop;
     checkCudaErrors(cudaEventCreate(&start));
@@ -96,7 +99,7 @@ int main(int argc, char** argv) {
     float msecTotal = 0;
     int nIter = 100;
 
-    checkCudaErrors(cudaMemcpy( d_C, h_C, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_C, h_C, CSIZE(uint8_t), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
 
     for (int run = 0 ; run < nIter; run ++ ) {
@@ -110,7 +113,7 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
 
 
-    checkCudaErrors(cudaMemcpy( h_C, d_C, bytes, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy( h_C, d_C, CSIZE(uint8_t), cudaMemcpyDeviceToHost));
 
     msecPerMatrixMul[0] = msecTotal / nIter;
     gigaFlops[0] = (flopsPerMatrixMul * 1.0e-9f) / (msecPerMatrixMul[0] / 1000.0f);
@@ -124,15 +127,15 @@ int main(int argc, char** argv) {
     checkCuBlasErrors ( cublasCreate(&blas_handle) );
     float alpha = 1.0;
     float beta = 0;
-    checkCudaErrors(cudaMemcpy( fd_A, fh_A, fbytes, cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy( fd_B, fh_B, fbytes, cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy( fd_C, fh_C, fbytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( fd_A, fh_A, ASIZE(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( fd_B, fh_B, BSIZE(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( fd_C, fh_C, CSIZE(float), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
     for (int run = 0 ; run < nIter; run ++ ) {
         checkCuBlasErrors (
             cublasSgemm (blas_handle, CUBLAS_OP_T, CUBLAS_OP_T, 
                 M, N, K, &alpha, 
-                fd_A, M, fd_B, K, &beta, fd_C, K
+                fd_A, K, fd_B, N, &beta, fd_C, M
             )
         );
     }
@@ -140,7 +143,7 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaEventSynchronize(stop));
     checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
 
-    checkCudaErrors(cudaMemcpy( fh_C, fd_C, fbytes, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy( fh_C, fd_C, CSIZE(float), cudaMemcpyDeviceToHost));
     // printf("\n");
     // for( int i = 0; i < M; i++ ) {
     //     for( int j = 0; j < K; j++ ) {

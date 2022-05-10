@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
         checkCuBlasErrors (
             cublasSgemm (blas_handle, CUBLAS_OP_T, CUBLAS_OP_T, 
                 M, N, K, &alpha, 
-                fd_A, M, fd_B, K, &beta, fd_C, K
+                fd_A, K, fd_B, N, &beta, fd_C, M
             )
         );
     }

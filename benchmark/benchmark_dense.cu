@@ -9,6 +9,9 @@
 #include "dense.cu"
 #include "utils.hpp"
 
+#define ASIZE(type) (sizeof(type) * M * K)
+#define BSIZE(type) (sizeof(type) * K * N)
+#define CSIZE(type) (sizeof(type) * M * N)
 
 int main(int argc, char** argv) {
     if (argc != 4) {
@@ -19,19 +22,18 @@ int main(int argc, char** argv) {
     size_t K = atoi(argv[2]);
     size_t N = atoi(argv[3]);
 
-    size_t bytes = sizeof(float) * M * K;
-    float* h_A = (float*)malloc(bytes);
-    float* h_B = (float*)malloc(bytes);
-    float* h_C = (float*)malloc(bytes);
-    float* h_C1 = (float*)malloc(bytes);
+    float* h_A = (float*)malloc(ASIZE(float));
+    float* h_B = (float*)malloc(BSIZE(float));
+    float* h_C = (float*)malloc(CSIZE(float));
+    float* h_C1 = (float*)malloc(CSIZE(float));
 
     float* d_A;
     float* d_B;
     float* d_C;
 
-    checkCudaErrors(cudaMalloc(&d_A, bytes));
-    checkCudaErrors(cudaMalloc(&d_B, bytes));
-    checkCudaErrors(cudaMalloc(&d_C, bytes));
+    checkCudaErrors(cudaMalloc(&d_A, ASIZE(float)));
+    checkCudaErrors(cudaMalloc(&d_B, BSIZE(float)));
+    checkCudaErrors(cudaMalloc(&d_C, CSIZE(float)));
     double msecPerMatrixMul[2] = {0, 0};
     double gigaFlops[2] = {0, 0};
     double flopsPerMatrixMul = 2.0 * M * N * K;
@@ -53,8 +55,8 @@ int main(int argc, char** argv) {
     copyMatrix(h_C1, h_C, M, N);
 
 
-    checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_A, h_A, ASIZE(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_B, h_B, BSIZE(float), cudaMemcpyHostToDevice));
     
     cudaEvent_t start, stop;
     checkCudaErrors(cudaEventCreate(&start));
@@ -62,7 +64,7 @@ int main(int argc, char** argv) {
     float msecTotal = 0;
     int nIter = 100;
 
-    checkCudaErrors(cudaMemcpy( d_C, h_C, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_C, h_C, CSIZE(float), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
 
     for (int run = 0 ; run < nIter; run ++ ) {
@@ -77,7 +79,7 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
 
 
-    checkCudaErrors(cudaMemcpy( h_C, d_C, bytes, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy( h_C, d_C, CSIZE(float), cudaMemcpyDeviceToHost));
 
     msecPerMatrixMul[0] = msecTotal / nIter;
     gigaFlops[0] = (flopsPerMatrixMul * 1.0e-9f) / (msecPerMatrixMul[0] / 1000.0f);
@@ -89,13 +91,13 @@ int main(int argc, char** argv) {
     // cublas
     cublasHandle_t blas_handle;  
     checkCuBlasErrors ( cublasCreate(&blas_handle) );
-    checkCudaErrors(cudaMemcpy( d_C, h_C1, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_C, h_C1, CSIZE(float), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
     for (int run = 0 ; run < nIter; run ++ ) {
         checkCuBlasErrors (
             cublasSgemm (blas_handle, CUBLAS_OP_T, CUBLAS_OP_T, 
                 M, N, K, &alpha, 
-                d_A, M, d_B, K, &beta, d_C, K
+                d_A, K, d_B, N, &beta, d_C, M
             )
         );
     }
@@ -103,7 +105,7 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaEventSynchronize(stop));
     checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
 
-    checkCudaErrors(cudaMemcpy( h_C1, d_C, bytes, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy( h_C1, d_C, CSIZE(float), cudaMemcpyDeviceToHost));
 
     msecPerMatrixMul[1] = msecTotal / nIter;
     gigaFlops[1] = (flopsPerMatrixMul * 1.0e-9f) / (msecPerMatrixMul[1] / 1000.0f);

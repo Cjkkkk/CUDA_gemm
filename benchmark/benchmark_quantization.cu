@@ -60,6 +60,9 @@ int main(int argc, char** argv) {
     int k_block = K / BLOCK_SIZE_K;
     int stride = 2;
 
+    float alpha = 2.0;
+    float beta = 0.0;
+
     // 生成A的数据
     for( int i = 0; i < M * K; i++ ) {
         int row = (i / K);
@@ -133,7 +136,7 @@ int main(int argc, char** argv) {
         dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
         dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
         MatrixMulCUDA6<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, ENABLE_DOUBLE_BUFFER> 
-        <<< dimGrid, dimBlock >>>(fd_A, fd_B, fd_C, K, N);
+        <<< dimGrid, dimBlock >>>(fd_A, fd_B, fd_C, M, K, N, alpha, beta);
 
     }
     checkCudaErrors(cudaEventRecord(stop));
