@@ -7,6 +7,8 @@
 
 #include "dense_help_func.hpp"
 #include "dense.cu"
+#include "utils.hpp"
+
 
 int main(int argc, char** argv) {
     if (argc != 4) {
@@ -40,28 +42,16 @@ int main(int argc, char** argv) {
     const int THREAD_SIZE_X = 4;
     const int THREAD_SIZE_Y = 4;
     const bool ENABLE_DOUBLE_BUFFER = false;
-    int k_block = K / BLOCK_SIZE_K;
-    int stride = 2;
+
+    float alpha = 2.0;
+    float beta = 0.0;
 
     // 生成A的数据
-    for( int i = 0; i < M * K; i++ ) {
-        int row = (i / K);
-        int col = (i % K);
-        int row_block = row / BLOCK_SIZE_M;
-        int col_block = col / BLOCK_SIZE_K;
-        if ((row_block * k_block + col_block) % stride == 0) h_A[i] = 1;
-        else {
-            h_A[i] = 0;
-        }
-    }
+    genRandomMatrix(h_A, M, K);
+    genRandomMatrix(h_B, K, N);
+    genRandomMatrix(h_C, M, N);
+    copyMatrix(h_C1, h_C, M, N);
 
-    // 生成B的数据
-    for( int i = 0; i < K * N; i++ ) {
-        if ( i >= K * N / 2) h_B[i] = 2;
-        else {
-            h_B[i] = 0;
-        }
-    }
 
     checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
@@ -79,7 +69,7 @@ int main(int argc, char** argv) {
         dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
         dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
         MatrixMulCUDA6<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, ENABLE_DOUBLE_BUFFER> 
-        <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, K, N);
+        <<< dimGrid, dimBlock >>>(d_A, d_B, d_C, M, K, N, alpha, beta);
 
     }
     checkCudaErrors(cudaEventRecord(stop));
@@ -99,9 +89,7 @@ int main(int argc, char** argv) {
     // cublas
     cublasHandle_t blas_handle;  
     checkCuBlasErrors ( cublasCreate(&blas_handle) );
-    float alpha = 1.0;
-    float beta = 0;
-    checkCudaErrors(cudaMemcpy( d_C, h_C, bytes, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy( d_C, h_C1, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
     for (int run = 0 ; run < nIter; run ++ ) {
         checkCuBlasErrors (

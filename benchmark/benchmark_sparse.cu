@@ -68,16 +68,7 @@ int main(int argc, char** argv) {
     }
 
     // 生成B的数据
-    for( int i = 0 ; i < K; i ++ ) {
-        for ( int j = 0 ; j < N ; j ++) {
-            if ( i < K / 2 && j < N / 2) h_B[i * N + j] = 0;
-            else if ( i < K / 2 && j >= N / 2) h_B[i * N + j] = 1;
-            else if ( i >= K / 2 && j < N / 2) h_B[i * N + j] = 2;
-            else {
-                h_B[i * N + j] = 3;
-            }
-        }
-    }
+    genRandomMatrix(h_B, K, N);
     
     checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));

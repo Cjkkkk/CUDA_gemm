@@ -25,8 +25,12 @@ __global__ void MatrixMulCUDA6(
     float * __restrict__ A,
     float * __restrict__ B,
     float * __restrict__ C, 
+    const int M,
     const int K,
-    const int N) {
+    const int N,
+    float alpha,
+    float beta
+    ) {
     // Block index
     int bx = blockIdx.x;
     int by = blockIdx.y;
@@ -69,6 +73,19 @@ __global__ void MatrixMulCUDA6(
     const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / A_TILE_THREAD_PER_ROW;
     const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / B_TILE_THREAD_PER_ROW;
     
+
+    // load C
+    // #pragma unroll
+    // for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
+    //     #pragma unroll
+    //     for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x+=4) {
+    //         FETCH_FLOAT4(accum[thread_y][thread_x]) = FETCH_FLOAT4(C[OFFSET(
+    //             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
+    //             BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + thread_x,
+    //             N)]);
+    //     }
+    // }
+
     // can not unroll since K can not be determined at this point
     for (int tile_idx = 0 ; tile_idx < K ; tile_idx += BLOCK_SIZE_K) {
         // load A from global memory to shared memory
@@ -102,8 +119,8 @@ __global__ void MatrixMulCUDA6(
 
             // load B from shared memory to register
             #pragma unroll
-            for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x += 4) {
-                FETCH_FLOAT4(frag_b[thread_x]) = FETCH_FLOAT4(Bs[k][THREAD_SIZE_X * tx + thread_x]);
+            for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
+                frag_b[thread_x] = Bs[k][THREAD_SIZE_X * tx + thread_x];
             }
             
             #pragma unroll
@@ -123,6 +140,10 @@ __global__ void MatrixMulCUDA6(
     for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
         #pragma unroll
         for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x+=4) {
+            accum[thread_y][thread_x] *= alpha;
+            accum[thread_y][thread_x + 1] *= alpha;
+            accum[thread_y][thread_x + 2] *= alpha;
+            accum[thread_y][thread_x + 3] *= alpha;
             FETCH_FLOAT4(C[OFFSET(
                 BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
                 BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + thread_x,

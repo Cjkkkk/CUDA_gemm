@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
     size_t M = atoi(argv[1]);
     size_t K = atoi(argv[2]);
     size_t N = atoi(argv[3]);
-    size_t Sparsity = atoi(argv[4]);
+    size_t sparsity = atoi(argv[4]);
 
     size_t bytes = sizeof(float) * M * K;
     float* h_A = (float*)malloc(bytes);
@@ -51,27 +51,10 @@ int main(int argc, char** argv) {
     
     // 生成A的数据
     // worst case random 
-    int nnz = M * K * (Sparsity / 100.0);
-    int nnz_stride = M * K / nnz;
-    for ( int i = 0; i < M * K; i++ ) {
-            if (i % nnz_stride == 0) h_A[i] = 1;
-            else {
-                h_A[i] = 0;
-            }
-        }
+    genSparseMatrix(h_A, M, K, sparsity);
+    genRandomMatrix(h_B, K, N);
 
     // 生成B的数据
-    for( int i = 0 ; i < K; i ++ ) {
-        for ( int j = 0 ; j < N ; j ++) {
-            if ( i < K / 2 && j < N / 2) h_B[i * N + j] = 0;
-            else if ( i < K / 2 && j >= N / 2) h_B[i * N + j] = 1;
-            else if ( i >= K / 2 && j < N / 2) h_B[i * N + j] = 2;
-            else {
-                h_B[i * N + j] = 3;
-            }
-        }
-    }
-    
     checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
     

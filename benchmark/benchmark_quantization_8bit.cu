@@ -74,12 +74,6 @@ int main(int argc, char** argv) {
             fh_A[i] = 0;
         }
     }
-    // for( int i = 0; i < M; i++ ) {
-    //     for( int j = 0; j < K; j++ ) {
-    //         printf("%d ", h_A[i * K + j]);
-    //     }
-    //     printf("\n");
-    // }
 
     // 生成B的数据
     for( int i = 0; i < K * N; i++ ) {
@@ -92,13 +86,6 @@ int main(int argc, char** argv) {
             fh_B[i] = 0;
         }
     }
-    // printf("\n");
-    // for( int i = 0; i < M; i++ ) {
-    //     for( int j = 0; j < K; j++ ) {
-    //         printf("%d ", h_B[i * K + j]);
-    //     }
-    //     printf("\n");
-    // }
 
     checkCudaErrors(cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice));
@@ -124,13 +111,6 @@ int main(int argc, char** argv) {
 
 
     checkCudaErrors(cudaMemcpy( h_C, d_C, bytes, cudaMemcpyDeviceToHost));
-    // printf("\n");
-    // for( int i = 0; i < M; i++ ) {
-    //     for( int j = 0; j < K; j++ ) {
-    //         printf("%d ", h_C[i * K + j]);
-    //     }
-    //     printf("\n");
-    // }
 
     msecPerMatrixMul[0] = msecTotal / nIter;
     gigaFlops[0] = (flopsPerMatrixMul * 1.0e-9f) / (msecPerMatrixMul[0] / 1000.0f);

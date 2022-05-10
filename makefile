@@ -17,9 +17,8 @@ FLAGS=-gencode=arch=compute_35,code=sm_35 \
     -gencode=arch=compute_70,code=sm_70 \
     -gencode=arch=compute_75,code=sm_75 \
     -gencode=arch=compute_60,code=compute_60
-DEP=$(CUDA_SOURCE)/encoding.cu \
-	$(CUDA_SOURCE)/encoding_in_reg.cu \
-	$(CUDA_SOURCE)/dense.cu \
+
+DEP=$(CUDA_SOURCE)/dense.cu \
 	$(CUDA_SOURCE)/sparse.cu \
 	$(CUDA_SOURCE)/quantization_int.cu \
 	$(CUDA_SOURCE)/quantization_8bit.cu \

@@ -10,4 +10,10 @@ void generate_bcsr(bcsr*, float* );
 
 void cal_nnz(csr*, float* );
 void generate_csr(csr*, float* );
+
+
+void genRandomMatrix(float* A, int M, int N);
+void genFixedMatrix(float* A, int M, int N);
+void genSparseMatrix(float* A, int M, int N, int sparsity);
+void copyMatrix(float* des, float* src, int M, int N);
 #endif
