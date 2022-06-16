@@ -31,13 +31,6 @@ __global__ void MatrixMulCUDA6(
     float alpha,
     float beta
     ) {
-    // Block index
-    int bx = blockIdx.x;
-    int by = blockIdx.y;
-
-    // Thread index
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
     
     // size of thread block
     const int bszx = BLOCK_SIZE_N / THREAD_SIZE_X;
@@ -45,7 +38,7 @@ __global__ void MatrixMulCUDA6(
     const int THREAD_NUM_PER_BLOCK = bszy * bszx;
 
     // thread id
-    const int tid = ty * bszx + tx;
+    const int tid = threadIdx.y * bszx + threadIdx.x;
 
     // shared memory
 
@@ -53,81 +46,105 @@ __global__ void MatrixMulCUDA6(
     __shared__ float Bs[BLOCK_SIZE_K][BLOCK_SIZE_N];
     // registers for C
     float accum[THREAD_SIZE_Y][THREAD_SIZE_X] = {0};
-    // registers for A and B
-    float frag_a[THREAD_SIZE_Y];
-    float frag_b[THREAD_SIZE_X];
     
-    // threads needed to load one row of tile
-    // / 4 is because float4 is used
-    const int A_TILE_THREAD_PER_ROW = BLOCK_SIZE_K / 4;
-    const int B_TILE_THREAD_PER_ROW = BLOCK_SIZE_N / 4;
-    
-    // row number and col number that needs to be loaded by this thread
-    const int A_TILE_ROW_START = tid / A_TILE_THREAD_PER_ROW;
-    const int B_TILE_ROW_START = tid / B_TILE_THREAD_PER_ROW;
+    // row number and col number that needs to be loaded blockIdx.y this thread
+    const int A_TILE_ROW = tid / BLOCK_SIZE_K;
+    const int B_TILE_ROW = tid / BLOCK_SIZE_N;
 
-    const int A_TILE_COL = tid % A_TILE_THREAD_PER_ROW * 4;
-    const int B_TILE_COL = tid % B_TILE_THREAD_PER_ROW * 4;
+    const int A_TILE_COL = tid % BLOCK_SIZE_K;
+    const int B_TILE_COL = tid % BLOCK_SIZE_N;
     
     // row stride that thread uses to load multiple rows of a tile
-    const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / A_TILE_THREAD_PER_ROW;
-    const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / B_TILE_THREAD_PER_ROW;
-    
+    const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / BLOCK_SIZE_K;
+    const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / BLOCK_SIZE_N;
 
-    // load C
-    // #pragma unroll
-    // for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
-    //     #pragma unroll
-    //     for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x+=4) {
-    //         FETCH_FLOAT4(accum[thread_y][thread_x]) = FETCH_FLOAT4(C[OFFSET(
-    //             BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
-    //             BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + thread_x,
-    //             N)]);
-    //     }
-    // }
+    const int A_S = BLOCK_SIZE_M / THREAD_SIZE_Y;
+    const int B_S = BLOCK_SIZE_N / THREAD_SIZE_X;
 
     // can not unroll since K can not be determined at this point
     for (int tile_idx = 0 ; tile_idx < K ; tile_idx += BLOCK_SIZE_K) {
         // load A from global memory to shared memory
+        // #pragma unroll
+        // for ( int i = A_TILE_ROW ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
+        //     const int row = BLOCK_SIZE_M * blockIdx.y + i;
+        //     const int col = A_TILE_COL + tile_idx;
+        //     if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
+        //         As[i][A_TILE_COL] = row < M && col < N ? A[OFFSET(
+        //             row, // row
+        //             col, // col
+        //             K )] : 0;
+        //     } else {
+        //         As[i][A_TILE_COL] = A[OFFSET(
+        //             row, // row
+        //             col, // col
+        //             K )];
+        //     }
+        // }
+
+        // // load B from global memory to shared memory
+        // #pragma unroll
+        // for ( int i = B_TILE_ROW ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
+        //     const int row = tile_idx + i;
+        //     const int col = B_TILE_COL + BLOCK_SIZE_N * blockIdx.x;
+        //     if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
+        //         Bs[i][B_TILE_COL] = row < M && col < N ? B[OFFSET(
+        //             row, // row
+        //             col, // col
+        //             N )] : 0;
+        //     } else {
+        //         Bs[i][B_TILE_COL] = B[OFFSET(
+        //             row, // row
+        //             col, // col
+        //             N )];
+        //     }
+        // }
+
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
-            FETCH_FLOAT4(As[A_TILE_ROW_START + i][A_TILE_COL]) = FETCH_FLOAT4(A[OFFSET(
-                    BLOCK_SIZE_M * by + A_TILE_ROW_START + i, // row
-                    A_TILE_COL + tile_idx, // col
-                    K )]);
+            const int row = BLOCK_SIZE_M * blockIdx.y + i + A_TILE_ROW ;
+            const int col = A_TILE_COL + tile_idx;
+            if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
+                As[i + A_TILE_ROW ][A_TILE_COL] = row < M && col < N ? A[OFFSET(
+                    row, // row
+                    col, // col
+                    K )] : 0;
+            } else {
+                As[i + A_TILE_ROW ][A_TILE_COL] = A[OFFSET(
+                    row, // row
+                    col, // col
+                    K )];
+            }
         }
 
         // load B from global memory to shared memory
         #pragma unroll
         for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
-            FETCH_FLOAT4(Bs[B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_FLOAT4(B[OFFSET(
-                    tile_idx + B_TILE_ROW_START + i, // row
-                    B_TILE_COL + BLOCK_SIZE_N * bx, // col
-                    N )]);
+            const int row = tile_idx + i + B_TILE_ROW;
+            const int col = B_TILE_COL + BLOCK_SIZE_N * blockIdx.x;
+            if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
+                Bs[i + B_TILE_ROW][B_TILE_COL] = row < M && col < N ? B[OFFSET(
+                    row, // row
+                    col, // col
+                    N )] : 0;
+            } else {
+                Bs[i + B_TILE_ROW][B_TILE_COL] = B[OFFSET(
+                    row, // row
+                    col, // col
+                    N )];
+            }
         }
-    
+
         __syncthreads();
 
         // compute c
         #pragma unroll
         for (int k = 0; k < BLOCK_SIZE_K; ++ k) {
-            // load A from shared memory to register
-            #pragma unroll
-            for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
-                frag_a[thread_y] = As[ty * THREAD_SIZE_Y + thread_y][k];
-            }
-
-            // load B from shared memory to register
-            #pragma unroll
-            for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-                frag_b[thread_x] = Bs[k][THREAD_SIZE_X * tx + thread_x];
-            }
-            
             #pragma unroll
             for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
                 #pragma unroll
                 for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-                    accum[thread_y][thread_x] += frag_a[thread_y] * frag_b[thread_x];
+                    // accum[thread_y][thread_x] += frag_a[thread_y] * frag_b[thread_x];
+                    accum[thread_y][thread_x] += As[thread_y * A_S + threadIdx.y][k] * Bs[k][thread_x * B_S + threadIdx.x];
                 }
             }
             
@@ -139,17 +156,16 @@ __global__ void MatrixMulCUDA6(
     #pragma unroll
     for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
         #pragma unroll
-        for (int thread_x = 0; thread_x < THREAD_SIZE_X; thread_x+=4) {
-            accum[thread_y][thread_x] *= alpha;
-            accum[thread_y][thread_x + 1] *= alpha;
-            accum[thread_y][thread_x + 2] *= alpha;
-            accum[thread_y][thread_x + 3] *= alpha;
-            FETCH_FLOAT4(C[OFFSET(
-                BLOCK_SIZE_M * by + ty * THREAD_SIZE_Y + thread_y,
-                BLOCK_SIZE_N * bx + tx * THREAD_SIZE_X + thread_x,
-                N)]) = FETCH_FLOAT4(accum[thread_y][thread_x]);
+        for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
+            const int row = BLOCK_SIZE_M * blockIdx.y + thread_y * A_S + threadIdx.y;
+            const int col = BLOCK_SIZE_N * blockIdx.x + thread_x * B_S + threadIdx.x;
+            if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
+                if (row < M && col < N) {
+                    C[OFFSET(row, col, N)] = C[OFFSET(row, col, N)] * beta + accum[thread_y][thread_x] * alpha;
+                }
+            } else {
+                C[OFFSET(row, col, N)] = C[OFFSET(row, col, N)] * beta + accum[thread_y][thread_x] * alpha;
+            }
         }
     }
 }
-
-// TODO add shuffle to enable GPU write back col

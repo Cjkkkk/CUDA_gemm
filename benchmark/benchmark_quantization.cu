@@ -103,9 +103,9 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaMemcpy( d_C, h_C, bytes, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
 
+    dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
+    dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
     for (int run = 0 ; run < nIter; run ++ ) {
-        dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
-        dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
         MatrixMulCUDAQuantize8bit<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, BIT_WIDTH, ENABLE_DOUBLE_BUFFER> 
         <<< dimGrid, dimBlock >>>((uint32_t*)d_A, (uint32_t*)d_B, (uint32_t*)d_C, K, N);
 
@@ -133,8 +133,6 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaEventRecord(start));
 
     for (int run = 0 ; run < nIter; run ++ ) {
-        dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
-        dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
         MatrixMulCUDA6<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, ENABLE_DOUBLE_BUFFER> 
         <<< dimGrid, dimBlock >>>(fd_A, fd_B, fd_C, M, K, N, alpha, beta);
 
@@ -157,15 +155,13 @@ int main(int argc, char** argv) {
     double eps = 1.e-6;  // machine zero
     bool correct = true;
     for (int i = 0; i < M * N; i++) {
-        int row = i / N;
-        int col = i % N;
-        double abs_err = fabs(h_C[i] - fh_C[row * N + col]);
+        double abs_err = fabs(h_C[i] - fh_C[i]);
         double dot_length = M;
         double abs_val = fabs(h_C[i]);
         double rel_err = abs_err / abs_val / dot_length;
         if (rel_err > eps) {
             printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n",
-                    i, (float)h_C[i], fh_C[row * N + col], eps);
+                    i, (float)h_C[i], fh_C[i], eps);
             correct = false;
             break;
         }

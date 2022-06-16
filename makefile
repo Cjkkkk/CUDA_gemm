@@ -40,7 +40,7 @@ $(BUILD)/%.o: $(MAIN_SOURCE)/%.cu $(DEP)
 
 benchmark_%: $(BUILD)/benchmark_%.o $(BUILD)/utils.o
 	$(CU) $^ -std=$(STD) -o $(BUILD)/$@ $(LIBS) $(FLAGS)
-	sh ${SCRIPT_SOURCE}/$@.sh
+	# sh ${SCRIPT_SOURCE}/$@.sh
 
 test: $(BUILD)/test.o $(BUILD)/utils.o
 	$(CC) $^ -std=$(STD) -o $(BUILD)/$@ -g

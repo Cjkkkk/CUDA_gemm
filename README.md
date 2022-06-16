@@ -28,14 +28,14 @@ C = alpha * A * B + beta * C
 
 ## experiments
 **located in benchmark/**
-* benchmark_quantization_8bit
-    * Compare My Gemm with Cublas
-* benchmark_quantization
-    * Compare My Gemm with My quantized non-uniform 8 bit Gemm
 * benchmark_dense
     * Compare My Gemm with Cublas
 * benchmark_sparse
     * Compare My block sparse Gemm with Cusparse
+* benchmark_quantization_8bit
+    * Compare My Gemm with Cublas
+* benchmark_quantization
+    * Compare My Gemm with My quantized non-uniform 8 bit Gemm
 
 ## TODO
 * (MatrixMulCUDA7) write back to C matrix, warp shuffle to enable global memory coalesce
@@ -44,6 +44,7 @@ C = alpha * A * B + beta * C
 ## run
 ```
 make benchmark_[experiment name]
+bash scripts/benchmark_[experiment name].sh
 ```
 
 ## Note

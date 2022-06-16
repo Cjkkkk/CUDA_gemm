@@ -79,6 +79,14 @@ void genRandomMatrix(float* A, int M, int N) {
     }
 }
 
+void FillMatrix(float* A, float num, int M, int N) {
+    for ( int i = 0; i < M; i ++ ) {
+        for (int j = 0; j < N; j ++) {
+            A[i * N + j] = num;
+        }
+    }
+}
+
 void genFixedMatrix(float* A, int M, int N) {
     for ( int i = 0; i < M; i ++ ) {
         for (int j = 0; j < N; j ++) {

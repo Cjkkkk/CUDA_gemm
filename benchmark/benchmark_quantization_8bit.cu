@@ -102,9 +102,10 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaMemcpy( d_C, h_C, CSIZE(uint8_t), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaEventRecord(start));
 
+    dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
+    dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
+
     for (int run = 0 ; run < nIter; run ++ ) {
-        dim3 dimBlock(BLOCK_SIZE_N / THREAD_SIZE_X, BLOCK_SIZE_M / THREAD_SIZE_Y);
-        dim3 dimGrid(N / BLOCK_SIZE_N, M / BLOCK_SIZE_M);
         MatrixMulCUDAQuantize8bit<BLOCK_SIZE_M, BLOCK_SIZE_K, BLOCK_SIZE_N, THREAD_SIZE_Y, THREAD_SIZE_X, BIT_WIDTH, ENABLE_DOUBLE_BUFFER> 
         <<< dimGrid, dimBlock >>>((uint32_t*)d_A, (uint32_t*)d_B, (uint32_t*)d_C, K, N);
     }
@@ -133,9 +134,9 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaEventRecord(start));
     for (int run = 0 ; run < nIter; run ++ ) {
         checkCuBlasErrors (
-            cublasSgemm (blas_handle, CUBLAS_OP_T, CUBLAS_OP_T, 
-                M, N, K, &alpha, 
-                fd_A, K, fd_B, N, &beta, fd_C, M
+            cublasSgemm (blas_handle, CUBLAS_OP_N, CUBLAS_OP_N, 
+                N, M, K, &alpha, 
+                fd_B, N, fd_A, K, &beta, fd_C, N
             )
         );
     }
@@ -144,13 +145,6 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
 
     checkCudaErrors(cudaMemcpy( fh_C, fd_C, CSIZE(float), cudaMemcpyDeviceToHost));
-    // printf("\n");
-    // for( int i = 0; i < M; i++ ) {
-    //     for( int j = 0; j < K; j++ ) {
-    //         printf("%0.f ", fh_C[j * M + i]);
-    //     }
-    //     printf("\n");
-    // }
     
     msecPerMatrixMul[1] = msecTotal / nIter;
     gigaFlops[1] = (flopsPerMatrixMul * 1.0e-9f) / (msecPerMatrixMul[1] / 1000.0f);
@@ -165,16 +159,13 @@ int main(int argc, char** argv) {
     double eps = 1.e-6;  // machine zero
     bool correct = true;
     for (int i = 0; i < M * N; i++) {
-        // fh_C 是转置
-        int row = i / N;
-        int col = i % N;
-        double abs_err = fabs(h_C[i] - fh_C[col * M + row]);
+        double abs_err = fabs(h_C[i] - fh_C[i]);
         double dot_length = M;
         double abs_val = fabs(h_C[i]);
         double rel_err = abs_err / abs_val / dot_length;
         if (rel_err > eps) {
             printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n",
-                    i, (float)h_C[i], fh_C[col * M + row], eps);
+                    i, (float)h_C[i], fh_C[i], eps);
             correct = false;
             break;
         }
