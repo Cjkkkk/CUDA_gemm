@@ -122,7 +122,7 @@ __global__ void MatrixMulCUDA6(
             const int row = tile_idx + i + B_TILE_ROW;
             const int col = B_TILE_COL + BLOCK_SIZE_N * blockIdx.x;
             if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
-                Bs[i + B_TILE_ROW][B_TILE_COL] = row < M && col < N ? B[OFFSET(
+                Bs[i + B_TILE_ROW][B_TILE_COL] = row < K && col < N ? B[OFFSET(
                     row, // row
                     col, // col
                     N )] : 0;
