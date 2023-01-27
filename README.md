@@ -43,6 +43,7 @@ C = alpha * A * B + beta * C
 
 ## run
 ```
+mkdir builds
 make benchmark_[experiment name]
 bash scripts/benchmark_[experiment name].sh
 ```
