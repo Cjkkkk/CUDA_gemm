@@ -103,7 +103,7 @@ __global__ void MatrixMulCUDA6(
         for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
             const int row = BLOCK_SIZE_M * blockIdx.y + i + A_TILE_ROW ;
             const int col = A_TILE_COL + tile_idx;
-            if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
+            if (tile_idx > K - BLOCK_SIZE_K || blockIdx.y == gridDim.y - 1) {
                 As[i + A_TILE_ROW ][A_TILE_COL] = row < M && col < K ? A[OFFSET(
                     row, // row
                     col, // col
@@ -121,7 +121,7 @@ __global__ void MatrixMulCUDA6(
         for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
             const int row = tile_idx + i + B_TILE_ROW;
             const int col = B_TILE_COL + BLOCK_SIZE_N * blockIdx.x;
-            if (blockIdx.x == gridDim.x -1 || blockIdx.y == gridDim.y - 1) {
+            if (blockIdx.x == gridDim.x -1 || tile_idx > K - BLOCK_SIZE_K ) {
                 Bs[i + B_TILE_ROW][B_TILE_COL] = row < K && col < N ? B[OFFSET(
                     row, // row
                     col, // col
