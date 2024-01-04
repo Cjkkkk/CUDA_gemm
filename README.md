@@ -48,6 +48,12 @@ make benchmark_[experiment name]
 bash scripts/benchmark_[experiment name].sh
 ```
 
+## run with cmake
+cmake -B builds
+cmake --build builds
+bash scripts/benchmark_[experiment name].sh
+
+
 ## Note
 * sparsity约为1%的时候, cusparse的性能可以超越cublas
 * 合理分配寄存器 尽可能让参数在编译器确定节省计算资源和寄存器数目
